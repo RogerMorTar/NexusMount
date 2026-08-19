@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NexusMount</string>
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_drives">Unidades</string>
+    <string name="nav_files">Archivos</string>
+    <string name="nav_transfers">Transferencias</string>
+    <string name="nav_settings">Ajustes</string>
+    <string name="add_drive">Añadir unidad</string>
+    <string name="connect_smb">Conectar Samba/SMB</string>
+    <string name="connect_tailscale">Tailscale</string>
+    <string name="no_drives">No hay unidades. Añade una conexión.</string>
+    <string name="scan_network">Escanear red</string>
+</resources>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/dashboardFragment">
+
+    <fragment android:id="@+id/dashboardFragment"
+        android:name="com.nexusmount.app.ui.DashboardFragment"
+        android:label="@string/nav_dashboard" />
+    <fragment android:id="@+id/drivesFragment"
+        android:name="com.nexusmount.app.ui.DrivesFragment"
+        android:label="@string/nav_drives" />
+    <fragment android:id="@+id/filesFragment"
+        android:name="com.nexusmount.app.ui.FilesFragment"
+        android:label="@string/nav_files" />
+    <fragment android:id="@+id/transfersFragment"
+        android:name="com.nexusmount.app.ui.TransfersFragment"
+        android:label="@string/nav_transfers" />
+    <fragment android:id="@+id/settingsFragment"
+        android:name="com.nexusmount.app.ui.SettingsFragment"
+        android:label="@string/nav_settings" />
+    <fragment android:id="@+id/aiFragment"
+        android:name="com.nexusmount.app.ui.AiFragment"
+        android:label="IA" />
+    <fragment android:id="@+id/securityFragment"
+        android:name="com.nexusmount.app.ui.SecurityFragment"
+        android:label="Seguridad" />
+    <fragment android:id="@+id/backupFragment"
+        android:name="com.nexusmount.app.ui.BackupFragment"
+        android:label="Backups" />
+    <fragment android:id="@+id/modulesConfigFragment"
+        android:name="com.nexusmount.app.ui.ModulesConfigFragment"
+        android:label="Módulos" />
+</navigation>
+
