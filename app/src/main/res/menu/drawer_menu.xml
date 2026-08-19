@@ -8,7 +8,7 @@
         <item android:id="@+id/backupFragment" android:title="Backups" android:icon="@android:drawable/ic_menu_revert" />
     </group>
     <group android:id="@+id/group_ai" android:checkableBehavior="single">
-        <item android:id="@+id/aiFragment" android:title="Nexus Command AI" android:icon="@android:drawable/ic_menu_edit" />
+        <item android:id="@+id/aiFragment" android:title="Rigo · Asistente IA" android:icon="@android:drawable/ic_menu_edit" />
         <item android:id="@+id/securityFragment" android:title="Seguridad 2FA" android:icon="@android:drawable/ic_lock_lock" />
         <item android:id="@+id/logsFragment" android:title="Logs técnicos" android:icon="@android:drawable/ic_menu_info_details" />
     </group>

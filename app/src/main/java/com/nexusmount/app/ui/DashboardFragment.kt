@@ -38,7 +38,7 @@ class DashboardFragment : Fragment() {
             "Transferencias" to "${transfers.size}",
             "Tailscale" to TailscaleUtil.statusSummary(requireContext()).lines().take(3).joinToString(" · "),
             "Ir a Explorador" to "Archivos locales + ZIP",
-            "Ir a IA" to "Comandos en lenguaje natural",
+            "Hablar con Rigo" to "Asistente IA bajo solicitud",
             "Ir a Seguridad" to "2FA y alertas",
             "Ir a Backups" to "Instantáneas ZIP",
             "Ir a Módulos" to "Drive, S3, WebDAV, recetas"
