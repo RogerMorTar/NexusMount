@@ -12,6 +12,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexusmount.app.NexusApp
+import com.nexusmount.app.R
 import com.nexusmount.app.data.DriveStatus
 import com.nexusmount.app.data.SmbHelper
 import com.nexusmount.app.databinding.FragmentListBinding
@@ -31,8 +32,8 @@ class DrivesFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         binding.titleText.text = "Mis Unidades"
-        binding.subtitleText.text = "SMB real • Almacenamiento local"
-        binding.primaryAction.text = "Añadir Samba / SMB"
+        binding.subtitleText.text = "SMB · Listar shares por IP · Local"
+        binding.primaryAction.text = "Añadir / listar Samba"
         binding.primaryAction.setOnClickListener { showAddSmbDialog() }
 
         adapter = SimpleAdapter(emptyList()) { pos ->
@@ -58,10 +59,10 @@ class DrivesFragment : Fragment() {
     private fun refresh() {
         val drives = (requireActivity().application as NexusApp).repository.getDrives()
         adapter.submit(drives.map {
-            it.name to "${it.type} • ${it.status} • ${it.path}"
+            it.name to "${it.type} · ${it.status} · ${it.path}"
         })
         binding.emptyText.visibility = if (drives.isEmpty()) View.VISIBLE else View.GONE
-        binding.emptyText.text = getString(com.nexusmount.app.R.string.no_drives)
+        binding.emptyText.text = getString(R.string.no_drives)
     }
 
     private fun showAddSmbDialog() {
@@ -79,46 +80,102 @@ class DrivesFragment : Fragment() {
                 layout.addView(this)
             }
         }
-        val host = field("Servidor / IP (ej: 100.64.0.10 o 192.168.1.50)")
-        val share = field("Recurso (share)", "share")
+        val host = field("IP Tailscale o local (ej: 100.64.0.10)")
         val user = field("Usuario")
-        val pass = field("Contraseña").apply { inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD }
-        val name = field("Nombre (opcional)")
+        val pass = field("Contraseña").apply {
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        val domain = field("Dominio (opcional, vacío si no aplica)")
+        val shareManual = field("Share manual (opcional si vas a listar)")
 
         AlertDialog.Builder(ctx)
-            .setTitle("Conectar Samba/SMB")
+            .setTitle("Samba / SMB")
             .setView(layout)
-            .setPositiveButton("Probar y guardar") { _, _ ->
+            .setPositiveButton("Listar recursos") { _, _ ->
                 val h = host.text.toString().trim()
-                val s = share.text.toString().trim()
                 val u = user.text.toString().trim()
                 val p = pass.text.toString()
-                if (h.isEmpty() || s.isEmpty()) {
-                    Toast.makeText(ctx, "Host y share obligatorios", Toast.LENGTH_SHORT).show()
+                val d = domain.text.toString().trim()
+                if (h.isEmpty()) {
+                    Toast.makeText(ctx, "IP obligatoria", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                Toast.makeText(ctx, "Conectando…", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "Buscando shares en $h…", Toast.LENGTH_SHORT).show()
                 viewLifecycleOwner.lifecycleScope.launch {
-                    val result = SmbHelper.testConnection(h, s, u, p)
-                    if (result.success) {
-                        val drive = SmbHelper.createDriveFromSmb(
-                            name.text.toString().ifBlank { "SMB $h" }, h, s
-                        ).copy(status = DriveStatus.ONLINE)
-                        (requireActivity().application as NexusApp).repository.addDrive(drive)
-                        // Guardar credenciales de forma simple (mejorar con EncryptedSharedPreferences en producción)
-                        ctx.getSharedPreferences("smb_creds", 0).edit()
-                            .putString("${drive.id}_user", u)
-                            .putString("${drive.id}_pass", p)
-                            .apply()
+                    val result = SmbHelper.listShares(h, u, p, d)
+                    if (!result.success || result.shares.isEmpty()) {
                         Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
-                        refresh()
+                        // Si puso share manual, intentar guardar igual
+                        val sm = shareManual.text.toString().trim()
+                        if (sm.isNotEmpty()) {
+                            connectAndSave(h, sm, u, p, d)
+                        }
                     } else {
-                        Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
+                        showSharePicker(h, u, p, d, result.shares)
                     }
                 }
             }
+            .setNeutralButton("Conectar a share") { _, _ ->
+                val h = host.text.toString().trim()
+                val s = shareManual.text.toString().trim()
+                val u = user.text.toString().trim()
+                val p = pass.text.toString()
+                val d = domain.text.toString().trim()
+                if (h.isEmpty() || s.isEmpty()) {
+                    Toast.makeText(ctx, "IP y share obligatorios", Toast.LENGTH_SHORT).show()
+                    return@setNeutralButton
+                }
+                connectAndSave(h, s, u, p, d)
+            }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    private fun showSharePicker(
+        host: String,
+        user: String,
+        pass: String,
+        domain: String,
+        shares: List<String>
+    ) {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Recursos en $host")
+            .setItems(shares.toTypedArray()) { _, which ->
+                val share = shares[which]
+                connectAndSave(host, share, user, pass, domain)
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    private fun connectAndSave(
+        host: String,
+        share: String,
+        user: String,
+        pass: String,
+        domain: String
+    ) {
+        val ctx = requireContext()
+        Toast.makeText(ctx, "Conectando a //$host/$share …", Toast.LENGTH_SHORT).show()
+        viewLifecycleOwner.lifecycleScope.launch {
+            val result = SmbHelper.testConnection(host, share, user, pass, domain)
+            if (result.success) {
+                val drive = SmbHelper.createDriveFromSmb("SMB $host/$share", host, share)
+                    .copy(status = DriveStatus.ONLINE)
+                (requireActivity().application as NexusApp).repository.addDrive(drive)
+                ctx.getSharedPreferences("smb_creds", 0).edit()
+                    .putString("${drive.id}_user", user)
+                    .putString("${drive.id}_pass", pass)
+                    .putString("${drive.id}_domain", domain)
+                    .putString("${drive.id}_host", host)
+                    .putString("${drive.id}_share", share)
+                    .apply()
+                Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
+                refresh()
+            } else {
+                Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     override fun onDestroyView() {
