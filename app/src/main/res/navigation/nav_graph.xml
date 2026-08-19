@@ -4,32 +4,17 @@
     android:id="@+id/nav_graph"
     app:startDestination="@id/dashboardFragment">
 
-    <fragment android:id="@+id/dashboardFragment"
-        android:name="com.nexusmount.app.ui.DashboardFragment"
-        android:label="@string/nav_dashboard" />
-    <fragment android:id="@+id/drivesFragment"
-        android:name="com.nexusmount.app.ui.DrivesFragment"
-        android:label="@string/nav_drives" />
-    <fragment android:id="@+id/filesFragment"
-        android:name="com.nexusmount.app.ui.FilesFragment"
-        android:label="@string/nav_files" />
-    <fragment android:id="@+id/transfersFragment"
-        android:name="com.nexusmount.app.ui.TransfersFragment"
-        android:label="@string/nav_transfers" />
-    <fragment android:id="@+id/settingsFragment"
-        android:name="com.nexusmount.app.ui.SettingsFragment"
-        android:label="@string/nav_settings" />
-    <fragment android:id="@+id/aiFragment"
-        android:name="com.nexusmount.app.ui.AiFragment"
-        android:label="IA" />
-    <fragment android:id="@+id/securityFragment"
-        android:name="com.nexusmount.app.ui.SecurityFragment"
-        android:label="Seguridad" />
-    <fragment android:id="@+id/backupFragment"
-        android:name="com.nexusmount.app.ui.BackupFragment"
-        android:label="Backups" />
-    <fragment android:id="@+id/modulesConfigFragment"
-        android:name="com.nexusmount.app.ui.ModulesConfigFragment"
-        android:label="Módulos" />
+    <fragment android:id="@+id/dashboardFragment" android:name="com.nexusmount.app.ui.DashboardFragment" android:label="Dashboard" />
+    <fragment android:id="@+id/drivesFragment" android:name="com.nexusmount.app.ui.DrivesFragment" android:label="Unidades" />
+    <fragment android:id="@+id/filesFragment" android:name="com.nexusmount.app.ui.FilesFragment" android:label="Explorador" />
+    <fragment android:id="@+id/transfersFragment" android:name="com.nexusmount.app.ui.TransfersFragment" android:label="Transferencias" />
+    <fragment android:id="@+id/settingsFragment" android:name="com.nexusmount.app.ui.SettingsFragment" android:label="Ajustes" />
+    <fragment android:id="@+id/aiFragment" android:name="com.nexusmount.app.ui.AiFragment" android:label="IA" />
+    <fragment android:id="@+id/securityFragment" android:name="com.nexusmount.app.ui.SecurityFragment" android:label="Seguridad" />
+    <fragment android:id="@+id/backupFragment" android:name="com.nexusmount.app.ui.BackupFragment" android:label="Backups" />
+    <fragment android:id="@+id/modulesConfigFragment" android:name="com.nexusmount.app.ui.ModulesConfigFragment" android:label="Módulos" />
+    <fragment android:id="@+id/sambaFragment" android:name="com.nexusmount.app.ui.SambaFragment" android:label="Samba" />
+    <fragment android:id="@+id/tailscaleFragment" android:name="com.nexusmount.app.ui.TailscaleFragment" android:label="Tailscale" />
+    <fragment android:id="@+id/collabFragment" android:name="com.nexusmount.app.ui.CollabFragment" android:label="Colaborativo" />
+    <fragment android:id="@+id/logsFragment" android:name="com.nexusmount.app.ui.LogsFragment" android:label="Logs" />
 </navigation>
-

@@ -52,5 +52,6 @@ dependencies {
     implementation("com.hierynomus:smbj:0.13.0")
     implementation("org.slf4j:slf4j-android:1.7.36")
     implementation("com.google.code.gson:gson:2.10.1")
+    implementation("androidx.drawerlayout:drawerlayout:1.2.0")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 }
