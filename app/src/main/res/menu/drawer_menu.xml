@@ -1,18 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-    <group android:checkableBehavior="single">
+    <group android:id="@+id/group_main" android:checkableBehavior="single">
         <item android:id="@+id/dashboardFragment" android:title="Dashboard" android:icon="@android:drawable/ic_menu_view" />
         <item android:id="@+id/drivesFragment" android:title="Mis Unidades" android:icon="@android:drawable/ic_menu_save" />
         <item android:id="@+id/filesFragment" android:title="Explorador Pro" android:icon="@android:drawable/ic_menu_agenda" />
         <item android:id="@+id/transfersFragment" android:title="Transferencias" android:icon="@android:drawable/ic_menu_upload" />
         <item android:id="@+id/backupFragment" android:title="Backups" android:icon="@android:drawable/ic_menu_revert" />
+    </group>
+    <group android:id="@+id/group_ai" android:checkableBehavior="single">
         <item android:id="@+id/aiFragment" android:title="Nexus Command AI" android:icon="@android:drawable/ic_menu_edit" />
-        <item android:id="@+id/securityFragment" android:title="Seguridad" android:icon="@android:drawable/ic_lock_lock" />
+        <item android:id="@+id/securityFragment" android:title="Seguridad 2FA" android:icon="@android:drawable/ic_lock_lock" />
+        <item android:id="@+id/logsFragment" android:title="Logs técnicos" android:icon="@android:drawable/ic_menu_info_details" />
+    </group>
+    <group android:id="@+id/group_net" android:checkableBehavior="single">
         <item android:id="@+id/sambaFragment" android:title="Samba / Red" android:icon="@android:drawable/ic_menu_share" />
         <item android:id="@+id/tailscaleFragment" android:title="Tailscale VPN" android:icon="@android:drawable/ic_menu_mylocation" />
+        <item android:id="@+id/networkGuideFragment" android:title="Guía de red" android:icon="@android:drawable/ic_menu_mapmode" />
+        <item android:id="@+id/webAccessFragment" android:title="Acceso Web" android:icon="@android:drawable/ic_menu_compass" />
         <item android:id="@+id/collabFragment" android:title="Colaborativo" android:icon="@android:drawable/ic_menu_my_calendar" />
+    </group>
+    <group android:id="@+id/group_cfg" android:checkableBehavior="single">
         <item android:id="@+id/modulesConfigFragment" android:title="Módulos y requisitos" android:icon="@android:drawable/ic_menu_manage" />
-        <item android:id="@+id/logsFragment" android:title="Logs técnicos" android:icon="@android:drawable/ic_menu_info_details" />
+        <item android:id="@+id/installerFragment" android:title="Instalador modular" android:icon="@android:drawable/ic_menu_add" />
         <item android:id="@+id/settingsFragment" android:title="Ajustes" android:icon="@android:drawable/ic_menu_preferences" />
     </group>
 </menu>

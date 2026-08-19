@@ -3,7 +3,6 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/nav_graph"
     app:startDestination="@id/dashboardFragment">
-
     <fragment android:id="@+id/dashboardFragment" android:name="com.nexusmount.app.ui.DashboardFragment" android:label="Dashboard" />
     <fragment android:id="@+id/drivesFragment" android:name="com.nexusmount.app.ui.DrivesFragment" android:label="Unidades" />
     <fragment android:id="@+id/filesFragment" android:name="com.nexusmount.app.ui.FilesFragment" android:label="Explorador" />
@@ -17,4 +16,7 @@
     <fragment android:id="@+id/tailscaleFragment" android:name="com.nexusmount.app.ui.TailscaleFragment" android:label="Tailscale" />
     <fragment android:id="@+id/collabFragment" android:name="com.nexusmount.app.ui.CollabFragment" android:label="Colaborativo" />
     <fragment android:id="@+id/logsFragment" android:name="com.nexusmount.app.ui.LogsFragment" android:label="Logs" />
+    <fragment android:id="@+id/networkGuideFragment" android:name="com.nexusmount.app.ui.NetworkGuideFragment" android:label="Guía red" />
+    <fragment android:id="@+id/webAccessFragment" android:name="com.nexusmount.app.ui.WebAccessFragment" android:label="Acceso Web" />
+    <fragment android:id="@+id/installerFragment" android:name="com.nexusmount.app.ui.InstallerFragment" android:label="Instalador" />
 </navigation>
