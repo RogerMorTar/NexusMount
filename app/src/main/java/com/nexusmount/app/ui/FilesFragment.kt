@@ -1,13 +1,21 @@
 package com.nexusmount.app.ui
 
+import android.Manifest
 import android.app.AlertDialog
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -28,6 +36,18 @@ class FilesFragment : Fragment() {
     private var currentDir: File = Environment.getExternalStorageDirectory()
     private var clipboard: Pair<File, Boolean>? = null
 
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        if (result.values.any { it }) {
+            toast("Permiso concedido")
+            openBestRoot()
+        } else {
+            toast("Sin permiso de almacenamiento")
+            showPermissionHelp()
+        }
+    }
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentListBinding.inflate(inflater, container, false)
         return binding.root
@@ -36,7 +56,7 @@ class FilesFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         binding.titleText.text = "Explorador Pro"
-        binding.primaryAction.text = "Acciones"
+        binding.primaryAction.text = "Acciones / Permisos"
         binding.primaryAction.setOnClickListener { showActionsMenu() }
 
         adapter = SimpleAdapter(emptyList()) { pos ->
@@ -54,8 +74,10 @@ class FilesFragment : Fragment() {
                     )
                 ) { _, which ->
                     when (which) {
-                        0 -> if (f.isDirectory) { currentDir = f; loadDir() }
-                            else Toast.makeText(requireContext(), "${f.name}\n${f.length()} bytes", Toast.LENGTH_SHORT).show()
+                        0 -> if (f.isDirectory) {
+                            currentDir = f
+                            loadDir()
+                        } else toast("${f.name}\n${f.length()} bytes")
                         1 -> { clipboard = f to false; toast("Copiado") }
                         2 -> { clipboard = f to true; toast("Cortado") }
                         3 -> promptRename(f)
@@ -71,42 +93,174 @@ class FilesFragment : Fragment() {
         }
         binding.recycler.layoutManager = LinearLayoutManager(requireContext())
         binding.recycler.adapter = adapter
+
+        ensureStorageAccess()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // User may return from settings with all-files access granted
+        if (hasFullStorageAccess()) {
+            openBestRoot()
+        }
+    }
+
+    private fun hasFullStorageAccess(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            ContextCompat.checkSelfPermission(
+                requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun ensureStorageAccess() {
+        if (hasFullStorageAccess()) {
+            openBestRoot()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            showPermissionHelp()
+            // Still try app-specific dirs so something opens
+            openBestRoot()
+        } else {
+            permissionLauncher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
+        }
+    }
+
+    private fun showPermissionHelp() {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Acceso al almacenamiento")
+            .setMessage(
+                "Para abrir el almacenamiento interno y los discos, Android pide el permiso " +
+                    "«Permitir acceso a todos los archivos».\n\n" +
+                    "1. Pulsa Abrir ajustes\n" +
+                    "2. Activa el permiso para NexusMount\n" +
+                    "3. Vuelve a la app"
+            )
+            .setPositiveButton("Abrir ajustes") { _, _ ->
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                            data = Uri.parse("package:${requireContext().packageName}")
+                        }
+                        startActivity(intent)
+                    } else {
+                        permissionLauncher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
+                    }
+                } catch (e: Exception) {
+                    try {
+                        startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                    } catch (_: Exception) {
+                        toast("Abre Ajustes → Apps → NexusMount → Permisos")
+                    }
+                }
+            }
+            .setNegativeButton("Usar carpeta de la app", null)
+            .show()
+    }
+
+    /** Prefer shared storage; fall back to accessible app dirs. */
+    private fun openBestRoot() {
+        val candidates = mutableListOf<File>()
+        try {
+            Environment.getExternalStorageDirectory()?.let { candidates.add(it) }
+        } catch (_: Exception) {}
+        try {
+            File("/storage/emulated/0").let { if (it.exists()) candidates.add(it) }
+        } catch (_: Exception) {}
+        try {
+            requireContext().getExternalFilesDir(null)?.let { candidates.add(it) }
+        } catch (_: Exception) {}
+        try {
+            requireContext().filesDir?.let { candidates.add(it) }
+        } catch (_: Exception) {}
+
+        val root = candidates.firstOrNull { canList(it) }
+            ?: candidates.firstOrNull()
+            ?: requireContext().filesDir
+
+        currentDir = root
         loadDir()
+    }
+
+    private fun canList(dir: File): Boolean {
+        return try {
+            dir.exists() && dir.isDirectory && dir.canRead() && dir.listFiles() != null
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun showActionsMenu() {
         AlertDialog.Builder(requireContext())
             .setTitle("Acciones")
             .setItems(
-                arrayOf("Subir nivel", "Nueva carpeta", "Pegar aquí", "Buscar…", "Ir a almacenamiento", "Actualizar")
+                arrayOf(
+                    "Subir nivel",
+                    "Nueva carpeta",
+                    "Pegar aquí",
+                    "Buscar…",
+                    "Almacenamiento interno (/storage/emulated/0)",
+                    "Carpeta de la app (siempre accesible)",
+                    "Pedir permiso de todos los archivos",
+                    "Actualizar"
+                )
             ) { _, which ->
                 when (which) {
                     0 -> currentDir.parentFile?.let { currentDir = it; loadDir() }
                     1 -> promptMkdir()
                     2 -> pasteHere()
                     3 -> promptSearch()
-                    4 -> { currentDir = Environment.getExternalStorageDirectory(); loadDir() }
-                    5 -> loadDir()
+                    4 -> {
+                        currentDir = File("/storage/emulated/0")
+                        if (!canList(currentDir)) {
+                            toast("Sin acceso — concede permiso de todos los archivos")
+                            showPermissionHelp()
+                        }
+                        loadDir()
+                    }
+                    5 -> {
+                        currentDir = requireContext().getExternalFilesDir(null) ?: requireContext().filesDir
+                        loadDir()
+                    }
+                    6 -> showPermissionHelp()
+                    7 -> loadDir()
                 }
             }
             .show()
     }
 
-    private fun listCurrent(): List<File> =
-        try {
-            currentDir.listFiles()?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })) ?: emptyList()
-        } catch (_: Exception) {
+    private fun listCurrent(): List<File> {
+        return try {
+            if (!currentDir.exists()) return emptyList()
+            currentDir.listFiles()
+                ?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+                ?: emptyList()
+        } catch (e: SecurityException) {
+            toast("Sin permiso: ${e.message}")
+            emptyList()
+        } catch (e: Exception) {
             emptyList()
         }
+    }
 
     private fun loadDir() {
         binding.subtitleText.text = currentDir.absolutePath
         val files = listCurrent()
+        if (files.isEmpty() && !canList(currentDir)) {
+            binding.emptyText.visibility = View.VISIBLE
+            binding.emptyText.text =
+                "No se puede leer esta carpeta.\n\nPulsa «Acciones / Permisos» → «Pedir permiso de todos los archivos»."
+            adapter.submit(emptyList())
+            return
+        }
         adapter.submit(files.map { f ->
             f.name to if (f.isDirectory) "Carpeta" else formatSize(f.length())
         })
         binding.emptyText.visibility = if (files.isEmpty()) View.VISIBLE else View.GONE
-        binding.emptyText.text = "Vacío o sin permiso"
+        binding.emptyText.text = "Carpeta vacía"
     }
 
     private fun promptMkdir() {
@@ -174,7 +328,7 @@ class FilesFragment : Fragment() {
     private fun promptSearch() {
         val input = EditText(requireContext()).apply { hint = "Nombre contiene…" }
         AlertDialog.Builder(requireContext())
-            .setTitle("Búsqueda técnica")
+            .setTitle("Búsqueda")
             .setView(input)
             .setPositiveButton("Buscar") { _, _ ->
                 val q = input.text.toString().trim()

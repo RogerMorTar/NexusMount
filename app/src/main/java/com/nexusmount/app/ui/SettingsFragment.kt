@@ -95,10 +95,22 @@ class SettingsFragment : Fragment() {
     }
 
     private fun requestStoragePermissions() {
-        val perms = if (Build.VERSION.SDK_INT >= 33) {
-            arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO)
-        } else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        permissionLauncher.launch(perms)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = android.net.Uri.parse("package:" + requireContext().packageName)
+                startActivity(intent)
+            } catch (e: Exception) {
+                try {
+                    startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                } catch (_: Exception) {
+                    Toast.makeText(requireContext(), "Ajustes → Apps → NexusMount → Permisos", Toast.LENGTH_LONG).show()
+                }
+            }
+        } else {
+            val perms = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            permissionLauncher.launch(perms)
+        }
     }
 
     override fun onDestroyView() {
