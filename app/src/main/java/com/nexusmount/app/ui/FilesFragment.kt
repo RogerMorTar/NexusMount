@@ -77,7 +77,7 @@ class FilesFragment : Fragment() {
                         0 -> if (f.isDirectory) {
                             currentDir = f
                             loadDir()
-                        } else toast("${f.name}\n${f.length()} bytes")
+                        } else openLocalFile(f)
                         1 -> { clipboard = f to false; toast("Copiado") }
                         2 -> { clipboard = f to true; toast("Cortado") }
                         3 -> promptRename(f)
@@ -350,6 +350,25 @@ class FilesFragment : Fragment() {
             }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+
+    private fun openLocalFile(f: File) {
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                requireContext(), requireContext().packageName + ".fileprovider", f
+            )
+            val ext = f.extension.lowercase()
+            val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+                ?: "application/octet-stream"
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(android.content.Intent.createChooser(intent, "Abrir ${f.name}"))
+        } catch (e: Exception) {
+            toast("No se pudo abrir: ${e.message}")
+        }
     }
 
     private fun formatSize(b: Long): String {

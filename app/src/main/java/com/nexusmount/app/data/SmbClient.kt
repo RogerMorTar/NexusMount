@@ -13,6 +13,15 @@ import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import com.hierynomus.msdtyp.AccessMask
+import com.hierynomus.msfscc.FileAttributes
+import com.hierynomus.mssmb2.SMB2CreateDisposition
+import com.hierynomus.mssmb2.SMB2ShareAccess
+import com.hierynomus.smbj.share.File as SmbFile
+import java.io.File
+import java.io.FileOutputStream
+import java.util.EnumSet
+
 
 /**
  * Cliente SMB robusto para Android (Tailscale / LAN).
@@ -316,6 +325,103 @@ object SmbHelper {
             try { client?.close() } catch (_: Exception) {}
         }
     }
+
+
+    /**
+     * Descarga un archivo del share a un fichero local (caché).
+     */
+    suspend fun downloadFile(
+        host: String,
+        share: String,
+        username: String,
+        password: String,
+        remotePath: String,
+        destFile: File,
+        domain: String = "",
+        onProgress: ((Int) -> Unit)? = null
+    ): SmbResult = withContext(Dispatchers.IO) {
+        var client: SMBClient? = null
+        var connection: Connection? = null
+        var session: Session? = null
+        try {
+            val triple = connectWithAuth(host, username, password, domain)
+            client = triple.first
+            connection = triple.second
+            session = triple.third
+            val disk = session.connectShare(share) as DiskShare
+            val path = remotePath.trimStart('/')
+            destFile.parentFile?.mkdirs()
+
+            val access = EnumSet.of(AccessMask.GENERIC_READ, AccessMask.FILE_READ_DATA)
+            val attrs = EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL)
+            val shareAccess = EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ)
+            val options = EnumSet.noneOf(com.hierynomus.mssmb2.SMB2CreateOptions::class.java)
+
+            disk.openFile(
+                path,
+                access,
+                attrs,
+                shareAccess,
+                SMB2CreateDisposition.FILE_OPEN,
+                options
+            ).use { smbFile ->
+                val total = try { smbFile.fileInformation.standardInformation.endOfFile } catch (_: Exception) { 0L }
+                smbFile.inputStream.use { input ->
+                    FileOutputStream(destFile).use { output ->
+                        val buf = ByteArray(64 * 1024)
+                        var copied = 0L
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n <= 0) break
+                            output.write(buf, 0, n)
+                            copied += n
+                            if (total > 0 && onProgress != null) {
+                                onProgress(((copied * 100) / total).toInt().coerceIn(0, 100))
+                            }
+                        }
+                    }
+                }
+            }
+            SmbResult(true, "Descargado: ${destFile.name}")
+        } catch (e: Exception) {
+            SmbResult(false, friendlyError(e, host), detail = e.message ?: "")
+        } finally {
+            try { session?.close() } catch (_: Exception) {}
+            try { connection?.close() } catch (_: Exception) {}
+            try { client?.close() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun deleteRemote(
+        host: String,
+        share: String,
+        username: String,
+        password: String,
+        remotePath: String,
+        isDirectory: Boolean,
+        domain: String = ""
+    ): SmbResult = withContext(Dispatchers.IO) {
+        var client: SMBClient? = null
+        var connection: Connection? = null
+        var session: Session? = null
+        try {
+            val triple = connectWithAuth(host, username, password, domain)
+            client = triple.first
+            connection = triple.second
+            session = triple.third
+            val disk = session.connectShare(share) as DiskShare
+            val path = remotePath.trimStart('/')
+            if (isDirectory) disk.rmdir(path, true) else disk.rm(path)
+            SmbResult(true, "Eliminado: $path")
+        } catch (e: Exception) {
+            SmbResult(false, friendlyError(e, host), detail = e.message ?: "")
+        } finally {
+            try { session?.close() } catch (_: Exception) {}
+            try { connection?.close() } catch (_: Exception) {}
+            try { client?.close() } catch (_: Exception) {}
+        }
+    }
+
 
     fun createDriveFromSmb(name: String, host: String, share: String): DriveItem =
         DriveItem(
