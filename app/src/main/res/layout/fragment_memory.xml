@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0B1326"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Análisis de memoria"
+            android:textColor="#DAE2FD"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="RAM y almacenamiento"
+            android:textColor="#2DD4BF"
+            android:textSize="13sp"
+            android:paddingBottom="12dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnRefresh"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Actualizar análisis" />
+
+        <!-- RAM -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Memoria RAM"
+            android:textColor="#ADC6FF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingTop="16dp" />
+
+        <TextView
+            android:id="@+id/ramText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#DAE2FD"
+            android:paddingTop="4dp"
+            android:paddingBottom="6dp" />
+
+        <ProgressBar
+            android:id="@+id/ramBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="18dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#F97316"
+            android:progressBackgroundTint="#1E293B" />
+
+        <!-- Bar chart legend RAM -->
+        <LinearLayout
+            android:id="@+id/ramLegend"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="6dp">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="■ Usada" android:textColor="#F97316" android:textSize="12sp"/>
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="■ Libre" android:textColor="#22C55E" android:textSize="12sp"/>
+        </LinearLayout>
+
+        <!-- Storage internal -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Almacenamiento interno"
+            android:textColor="#ADC6FF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingTop="20dp" />
+
+        <TextView
+            android:id="@+id/storageText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#DAE2FD"
+            android:paddingTop="4dp"
+            android:paddingBottom="6dp" />
+
+        <ProgressBar
+            android:id="@+id/storageBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="18dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#3B82F6"
+            android:progressBackgroundTint="#1E293B" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="6dp">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="■ Usado" android:textColor="#3B82F6" android:textSize="12sp"/>
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="■ Libre" android:textColor="#22C55E" android:textSize="12sp"/>
+        </LinearLayout>
+
+        <!-- Visual stacked bar (pie-like) -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Distribución almacenamiento"
+            android:textColor="#ADC6FF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingTop="20dp" />
+
+        <LinearLayout
+            android:id="@+id/stackBar"
+            android:layout_width="match_parent"
+            android:layout_height="28dp"
+            android:orientation="horizontal"
+            android:paddingTop="8dp" />
+
+        <TextView
+            android:id="@+id/stackLegend"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#8C909F"
+            android:textSize="12sp"
+            android:paddingTop="6dp" />
+
+        <!-- App -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Uso de NexusMount"
+            android:textColor="#ADC6FF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingTop="20dp" />
+
+        <TextView
+            android:id="@+id/appText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#DAE2FD"
+            android:paddingTop="4dp" />
+
+        <ProgressBar
+            android:id="@+id/appBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="14dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="#A855F7"
+            android:progressBackgroundTint="#1E293B"
+            android:paddingTop="4dp" />
+
+        <!-- Details list -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Detalle técnico"
+            android:textColor="#ADC6FF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingTop="20dp" />
+
+        <TextView
+            android:id="@+id/detailText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#8C909F"
+            android:textSize="13sp"
+            android:fontFamily="monospace"
+            android:paddingTop="6dp"
+            android:paddingBottom="24dp" />
+
+    </LinearLayout>
+</ScrollView>

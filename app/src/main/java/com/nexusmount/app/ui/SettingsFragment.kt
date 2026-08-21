@@ -66,6 +66,7 @@ class SettingsFragment : Fragment() {
             Row("Permisos / ACL", "Permisos de la app y NAS", { findNavController().navigate(R.id.permissionsFragment) }),
             Row("Logs técnicos", "Eventos de seguridad e IA", { findNavController().navigate(R.id.logsFragment) }),
             Row("── Mantenimiento ──", "", null),
+            Row("Análisis de memoria", "RAM y almacenamiento con gráficos", { findNavController().navigate(R.id.memoryFragment) }),
             Row("Limpieza inteligente", "Caché, temporales, archivos grandes", { findNavController().navigate(R.id.cleanupFragment) }),
             Row("Bloqueo de anuncios", "Filtro in-app + DNS privado", { findNavController().navigate(R.id.adBlockFragment) }),
             Row("── Backups e IA ──", "", null),

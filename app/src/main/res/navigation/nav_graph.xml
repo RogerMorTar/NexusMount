@@ -34,7 +34,9 @@
     <fragment android:id="@+id/interconnectFragment" android:name="com.nexusmount.app.ui.InterconnectFragment" android:label="Interconexión" />
     <fragment android:id="@+id/cleanupFragment" android:name="com.nexusmount.app.ui.CleanupFragment" android:label="Limpieza" />
     <fragment android:id="@+id/adBlockFragment" android:name="com.nexusmount.app.ui.AdBlockFragment" android:label="Anuncios" />
+    <fragment android:id="@+id/memoryFragment" android:name="com.nexusmount.app.ui.MemoryFragment" android:label="Memoria" />
 </navigation>
+
 
 
 

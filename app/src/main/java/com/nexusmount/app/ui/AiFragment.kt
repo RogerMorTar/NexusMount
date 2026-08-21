@@ -267,6 +267,7 @@ class AiFragment : Fragment() {
             "interconnect" -> R.id.interconnectFragment
             "collab" -> R.id.collabFragment
             "cleanup" -> R.id.cleanupFragment
+            "memory" -> R.id.memoryFragment
             "adblock" -> R.id.adBlockFragment
             else -> null
         }

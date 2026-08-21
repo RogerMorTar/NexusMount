@@ -137,6 +137,7 @@ object CommandAI {
             sectionMatch(t, "interconex", "interconnex") -> return Action.OpenSection("interconnect")
             sectionMatch(t, "colaborat") -> return Action.OpenSection("collab")
             sectionMatch(t, "limpieza", "limpiar", "cleanup") -> return Action.OpenSection("cleanup")
+            sectionMatch(t, "memoria", "ram", "memory", "almacenamiento") -> return Action.OpenSection("memory")
             sectionMatch(t, "anuncios", "adblock", "bloqueo") -> return Action.OpenSection("adblock")
 
             t.matches(Regex(".*(lista|listar|mostrar|list).*carpetas?.*")) ||
