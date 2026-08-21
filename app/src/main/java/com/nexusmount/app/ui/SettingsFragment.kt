@@ -67,6 +67,7 @@ class SettingsFragment : Fragment() {
             "Acceso Web" to "Preferencias acceso remoto",
             "Sync Web ↔ Teléfono" to "Estado de sincronización",
             "Añadir conexión" to "Multi-fuente (SMB, cloud…)",
+            "Interconexión (visor IP)" to "Solo lectura por LAN/Tailscale",
             "── Seguridad ──" to "",
             "Seguridad 2FA" to "TOTP y códigos de respaldo",
             "Alertas de intrusión" to "Monitoreo de accesos",
@@ -86,27 +87,29 @@ class SettingsFragment : Fragment() {
         )
         binding.recycler.layoutManager = LinearLayoutManager(requireContext())
         binding.recycler.adapter = SimpleAdapter(items) { pos ->
-            when (pos) {
-                1 -> findNavController().navigate(R.id.tailscaleFragment)
-                2 -> findNavController().navigate(R.id.sambaFragment)
-                3 -> findNavController().navigate(R.id.networkGuideFragment)
-                4 -> findNavController().navigate(R.id.webAccessFragment)
-                5 -> findNavController().navigate(R.id.deviceSyncFragment)
-                6 -> findNavController().navigate(R.id.addConnectionFragment)
-                8 -> findNavController().navigate(R.id.securityFragment)
-                9 -> findNavController().navigate(R.id.intrusionFragment)
-                10 -> findNavController().navigate(R.id.permissionsFragment)
-                11 -> findNavController().navigate(R.id.logsFragment)
-                13 -> findNavController().navigate(R.id.backupConfigFragment)
-                14 -> findNavController().navigate(R.id.recoveryFragment)
-                15 -> findNavController().navigate(R.id.aiAutomationFragment)
-                16 -> findNavController().navigate(R.id.aiPrivacyFragment)
-                17 -> findNavController().navigate(R.id.terminalFragment)
-                19 -> findNavController().navigate(R.id.modulesConfigFragment)
-                20 -> findNavController().navigate(R.id.installerFragment)
-                21 -> findNavController().navigate(R.id.languageFragment)
-                22 -> requestStoragePermissions()
+            when (items[pos].first) {
+                "Tailscale VPN" -> findNavController().navigate(R.id.tailscaleFragment)
+                "Samba / SMB" -> findNavController().navigate(R.id.sambaFragment)
+                "Guía de red local" -> findNavController().navigate(R.id.networkGuideFragment)
+                "Acceso Web" -> findNavController().navigate(R.id.webAccessFragment)
+                "Sync Web ↔ Teléfono" -> findNavController().navigate(R.id.deviceSyncFragment)
+                "Añadir conexión" -> findNavController().navigate(R.id.addConnectionFragment)
+                "Interconexión (visor IP)" -> findNavController().navigate(R.id.interconnectFragment)
+                "Seguridad 2FA" -> findNavController().navigate(R.id.securityFragment)
+                "Alertas de intrusión" -> findNavController().navigate(R.id.intrusionFragment)
+                "Permisos / ACL" -> findNavController().navigate(R.id.permissionsFragment)
+                "Logs técnicos" -> findNavController().navigate(R.id.logsFragment)
+                "Config. backups" -> findNavController().navigate(R.id.backupConfigFragment)
+                "Recuperación" -> findNavController().navigate(R.id.recoveryFragment)
+                "Automatización IA" -> findNavController().navigate(R.id.aiAutomationFragment)
+                "Privacidad IA" -> findNavController().navigate(R.id.aiPrivacyFragment)
+                "Terminal / Rigo" -> findNavController().navigate(R.id.terminalFragment)
+                "Módulos y requisitos" -> findNavController().navigate(R.id.modulesConfigFragment)
+                "Instalador modular" -> findNavController().navigate(R.id.installerFragment)
+                "Idioma ES/EN" -> findNavController().navigate(R.id.languageFragment)
+                "Permiso almacenamiento" -> requestStoragePermissions()
             }
+        }
         }
     }
 

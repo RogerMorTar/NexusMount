@@ -5,11 +5,9 @@ import androidx.appcompat.app.ActionBarDrawerToggle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
-import androidx.navigation.ui.NavigationUI
 import androidx.navigation.ui.setupWithNavController
-import com.google.android.material.bottomnavigation.BottomNavigationView
-import com.google.android.material.navigation.NavigationView
 import com.nexusmount.app.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -28,8 +26,34 @@ class MainActivity : AppCompatActivity() {
         val navHost = supportFragmentManager.findFragmentById(R.id.nav_host) as NavHostFragment
         val navController = navHost.navController
 
-        binding.bottomNav.setupWithNavController(navController)
-        binding.navView.setupWithNavController(navController)
+        // Bottom nav: navigate even desde pantallas profundas (SMB, etc.)
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            val opts = NavOptions.Builder()
+                .setLaunchSingleTop(true)
+                .setPopUpTo(R.id.dashboardFragment, false)
+                .build()
+            try {
+                navController.navigate(item.itemId, null, opts)
+                true
+            } catch (_: Exception) {
+                try {
+                    navController.navigate(item.itemId)
+                    true
+                } catch (_: Exception) {
+                    false
+                }
+            }
+        }
+        navController.addOnDestinationChangedListener { _, dest, _ ->
+            val id = dest.id
+            val bottomIds = setOf(
+                R.id.dashboardFragment, R.id.drivesFragment, R.id.filesFragment,
+                R.id.transfersFragment, R.id.settingsFragment
+            )
+            if (id in bottomIds) {
+                binding.bottomNav.menu.findItem(id)?.isChecked = true
+            }
+        }
 
         val toggle = ActionBarDrawerToggle(
             this, drawerLayout, binding.toolbar,
@@ -39,9 +63,20 @@ class MainActivity : AppCompatActivity() {
         toggle.syncState()
 
         binding.navView.setNavigationItemSelectedListener { item ->
-            val handled = NavigationUI.onNavDestinationSelected(item, navController)
-            if (handled) drawerLayout.closeDrawer(GravityCompat.START)
-            handled
+            val opts = NavOptions.Builder()
+                .setLaunchSingleTop(true)
+                .setPopUpTo(R.id.dashboardFragment, false)
+                .build()
+            try {
+                navController.navigate(item.itemId, null, opts)
+            } catch (_: Exception) {
+                try {
+                    navController.navigate(item.itemId)
+                } catch (_: Exception) {
+                }
+            }
+            drawerLayout.closeDrawer(GravityCompat.START)
+            true
         }
     }
 

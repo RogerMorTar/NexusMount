@@ -11,8 +11,8 @@ android {
         applicationId = "com.nexusmount.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 46
-        versionName = "4.5.46"
+        versionCode = 47
+        versionName = "4.5.47"
     }
 
 

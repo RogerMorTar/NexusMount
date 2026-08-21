@@ -12,8 +12,10 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.fragment.app.Fragment
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexusmount.app.NexusApp
+import com.nexusmount.app.R
 import com.nexusmount.app.data.DriveType
 import com.nexusmount.app.databinding.FragmentListBinding
 import com.nexusmount.app.util.TailscaleUtil
@@ -95,6 +97,25 @@ class CollabFragment : Fragment() {
             }
         }
 
+        items.add("── Agenda y reuniones ──" to "")
+        val meetings = loadMeetings()
+        if (meetings.length() == 0) {
+            items.add("Sin reuniones" to "Toca «Nueva reunión» abajo")
+        } else {
+            for (i in 0 until meetings.length()) {
+                val m = meetings.getJSONObject(i)
+                items.add(
+                    "📅 ${m.optString("title")}" to
+                        "${m.optString("when")} · ${m.optString("place")}"
+                )
+            }
+        }
+        items.add("Nueva reunión / agenda" to "Título, fecha, lugar, notas")
+
+        items.add("── Interconexión ──" to "")
+        items.add("Visor por IP (solo lectura)" to "Ver y copiar archivos de otro dispositivo")
+        items.add("Abrir documento con apps" to "WPS, PDF, galería… (elige archivo local)")
+
         items.add("── Acciones rápidas ──" to "")
         items.add("Unirse con código" to "Introduce un código de invitación")
         items.add("Cómo funciona" to "Tailscale + SMB: misma red mesh, carpetas del PC/NAS")
@@ -111,6 +132,13 @@ class CollabFragment : Fragment() {
                 }
                 label == "Unirse con código" -> joinWithCode()
                 label == "Cómo funciona" -> showHelp()
+                label == "Nueva reunión / agenda" -> addMeeting()
+                label == "Sin reuniones" -> addMeeting()
+                label.startsWith("📅") -> showMeeting(label.removePrefix("📅 ").trim())
+                label == "Visor por IP (solo lectura)" -> {
+                    try { findNavController().navigate(R.id.interconnectFragment) } catch (e: Exception) { toast("${e.message}") }
+                }
+                label == "Abrir documento con apps" -> openLocalWithApps()
                 label == "Tu IP Tailscale" -> {
                     val text = TailscaleUtil.statusSummary(requireContext())
                     AlertDialog.Builder(requireContext())
@@ -371,6 +399,102 @@ class CollabFragment : Fragment() {
             .setPositiveButton("OK", null)
             .show()
     }
+
+
+    private fun loadMeetings(): JSONArray {
+        return try { JSONArray(prefs().getString("meetings", "[]")) } catch (_: Exception) { JSONArray() }
+    }
+
+    private fun saveMeetings(arr: JSONArray) {
+        prefs().edit().putString("meetings", arr.toString()).apply()
+    }
+
+    private fun addMeeting() {
+        val title = EditText(requireContext()).apply { hint = "Título" }
+        val whenEt = EditText(requireContext()).apply { hint = "Cuándo (ej. 2026-08-22 18:00)" }
+        val place = EditText(requireContext()).apply { hint = "Lugar o enlace" }
+        val notes = EditText(requireContext()).apply { hint = "Notas" }
+        val box = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 20, 40, 10)
+            addView(title); addView(whenEt); addView(place); addView(notes)
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("Nueva reunión / agenda")
+            .setView(box)
+            .setPositiveButton("Guardar") { _, _ ->
+                val arr = loadMeetings()
+                arr.put(
+                    JSONObject()
+                        .put("title", title.text.toString().ifBlank { "Reunión" })
+                        .put("when", whenEt.text.toString())
+                        .put("place", place.text.toString())
+                        .put("notes", notes.text.toString())
+                )
+                saveMeetings(arr)
+                toast("Guardado")
+                refresh()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun showMeeting(title: String) {
+        val arr = loadMeetings()
+        for (i in 0 until arr.length()) {
+            val m = arr.getJSONObject(i)
+            if (m.optString("title") == title) {
+                AlertDialog.Builder(requireContext())
+                    .setTitle(title)
+                    .setMessage("Cuándo: ${m.optString("when")}\nLugar: ${m.optString("place")}\n\n${m.optString("notes")}")
+                    .setPositiveButton("OK", null)
+                    .setNegativeButton("Eliminar") { _, _ ->
+                        val next = JSONArray()
+                        for (j in 0 until arr.length()) if (j != i) next.put(arr.get(j))
+                        saveMeetings(next)
+                        refresh()
+                    }
+                    .show()
+                return
+            }
+        }
+    }
+
+    private fun openLocalWithApps() {
+        val root = requireContext().getExternalFilesDir(null) ?: requireContext().filesDir
+        val files = root.walkTopDown().maxDepth(3).filter { it.isFile }.take(40).toList()
+        if (files.isEmpty()) {
+            toast("No hay archivos en la carpeta de la app. Copia alguno antes.")
+            return
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("Abrir con WPS / PDF /…")
+            .setItems(files.map { it.name }.toTypedArray()) { _, which ->
+                val f = files[which]
+                try {
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        requireContext(), requireContext().packageName + ".fileprovider", f
+                    )
+                    val ext = f.extension.lowercase()
+                    val mime = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+                        ?: "application/octet-stream"
+                    startActivity(
+                        android.content.Intent.createChooser(
+                            android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, mime)
+                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            },
+                            "Abrir ${f.name}"
+                        )
+                    )
+                } catch (e: Exception) {
+                    toast("Instala WPS Office o un visor PDF: ${e.message}")
+                }
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
 
     private fun toast(m: String) =
         Toast.makeText(requireContext(), m, Toast.LENGTH_SHORT).show()
