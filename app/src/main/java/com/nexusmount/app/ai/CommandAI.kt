@@ -65,7 +65,7 @@ object CommandAI {
         
         ══ App ══
         • backup
-        • colaborativo
+        • colaborativo · limpieza · anuncios
         • abrir [dashboard|unidades|explorador|seguridad|ajustes|…]
         • estado · ayuda · hola
     """.trimIndent()
@@ -136,6 +136,8 @@ object CommandAI {
             sectionMatch(t, "transferencias", "transfers") -> return Action.OpenSection("transfers")
             sectionMatch(t, "interconex", "interconnex") -> return Action.OpenSection("interconnect")
             sectionMatch(t, "colaborat") -> return Action.OpenSection("collab")
+            sectionMatch(t, "limpieza", "limpiar", "cleanup") -> return Action.OpenSection("cleanup")
+            sectionMatch(t, "anuncios", "adblock", "bloqueo") -> return Action.OpenSection("adblock")
 
             t.matches(Regex(".*(lista|listar|mostrar|list).*carpetas?.*")) ||
                 t == "ls" || t == "dir" ->

@@ -48,60 +48,44 @@ class SettingsFragment : Fragment() {
         if (_binding != null) refresh()
     }
 
+    
     private fun refresh() {
         val ts = TailscaleUtil.statusSummary(requireContext()).lines().take(2).joinToString(" · ")
-        val items = listOf(
-            "── Red y acceso ──" to "",
-            "Tailscale VPN" to ts,
-            "Samba / SMB" to "Cliente y workgroup",
-            "Guía de red local" to "Topología LAN + Tailscale",
-            "Acceso Web" to "Preferencias acceso remoto",
-            "Sync Web ↔ Teléfono" to "Estado de sincronización",
-            "Añadir conexión" to "Multi-fuente (SMB, cloud…)",
-            "Interconexión (visor IP)" to "Solo lectura por LAN/Tailscale",
-            "── Seguridad ──" to "",
-            "Seguridad 2FA" to "TOTP y códigos de respaldo",
-            "Alertas de intrusión" to "Monitoreo de accesos",
-            "Permisos / ACL" to "Permisos de la app y NAS",
-            "Logs técnicos" to "Eventos de seguridad e IA",
-            "── Backups e IA ──" to "",
-            "Config. backups" to "Programación e integridad",
-            "Recuperación" to "Instantáneas históricas",
-            "Automatización IA" to "Recetas y disparadores",
-            "Privacidad IA" to "PII y cloud",
-            "Terminal / Rigo" to "Consola de comandos",
-            "── Sistema ──" to "",
-            "Módulos y requisitos" to "Drive, S3, WebDAV, keys",
-            "Instalador modular" to "Activar/desactivar módulos",
-            "Idioma ES/EN" to "Preferencia de idioma",
-            "Permiso almacenamiento" to if (hasReadPermission()) "Concedido ✓" else "Pendiente"
+        data class Row(val title: String, val sub: String, val action: (() -> Unit)?)
+        val rows = listOf(
+            Row("── Red y acceso ──", "", null),
+            Row("Tailscale VPN", ts, { findNavController().navigate(R.id.tailscaleFragment) }),
+            Row("Samba / SMB", "Cliente y workgroup", { findNavController().navigate(R.id.sambaFragment) }),
+            Row("Guía de red local", "Topología LAN + Tailscale", { findNavController().navigate(R.id.networkGuideFragment) }),
+            Row("Acceso Web", "Preferencias acceso remoto", { findNavController().navigate(R.id.webAccessFragment) }),
+            Row("Sync Web ↔ Teléfono", "Estado de sincronización", { findNavController().navigate(R.id.deviceSyncFragment) }),
+            Row("Añadir conexión", "Multi-fuente (SMB, cloud…)", { findNavController().navigate(R.id.addConnectionFragment) }),
+            Row("── Seguridad ──", "", null),
+            Row("Seguridad 2FA", "TOTP y códigos de respaldo", { findNavController().navigate(R.id.securityFragment) }),
+            Row("Alertas de intrusión", "Monitoreo de accesos", { findNavController().navigate(R.id.intrusionFragment) }),
+            Row("Permisos / ACL", "Permisos de la app y NAS", { findNavController().navigate(R.id.permissionsFragment) }),
+            Row("Logs técnicos", "Eventos de seguridad e IA", { findNavController().navigate(R.id.logsFragment) }),
+            Row("── Mantenimiento ──", "", null),
+            Row("Limpieza inteligente", "Caché, temporales, archivos grandes", { findNavController().navigate(R.id.cleanupFragment) }),
+            Row("Bloqueo de anuncios", "Filtro in-app + DNS privado", { findNavController().navigate(R.id.adBlockFragment) }),
+            Row("── Backups e IA ──", "", null),
+            Row("Config. backups", "Programación e integridad", { findNavController().navigate(R.id.backupConfigFragment) }),
+            Row("Recuperación", "Instantáneas históricas", { findNavController().navigate(R.id.recoveryFragment) }),
+            Row("Automatización IA", "Recetas y disparadores", { findNavController().navigate(R.id.aiAutomationFragment) }),
+            Row("Privacidad IA", "PII y cloud", { findNavController().navigate(R.id.aiPrivacyFragment) }),
+            Row("Terminal / Rigo", "Consola de comandos", { findNavController().navigate(R.id.terminalFragment) }),
+            Row("── Sistema ──", "", null),
+            Row("Módulos y requisitos", "Drive, S3, WebDAV, keys", { findNavController().navigate(R.id.modulesConfigFragment) }),
+            Row("Instalador modular", "Activar/desactivar módulos", { findNavController().navigate(R.id.installerFragment) }),
+            Row("Idioma ES/EN", "Preferencia de idioma", { findNavController().navigate(R.id.languageFragment) }),
+            Row("Permiso almacenamiento", if (hasReadPermission()) "Concedido ✓" else "Pendiente", { requestStoragePermissions() })
         )
         binding.recycler.layoutManager = LinearLayoutManager(requireContext())
-        binding.recycler.adapter = SimpleAdapter(items) { pos ->
-            when (items[pos].first) {
-                "Tailscale VPN" -> findNavController().navigate(R.id.tailscaleFragment)
-                "Samba / SMB" -> findNavController().navigate(R.id.sambaFragment)
-                "Guía de red local" -> findNavController().navigate(R.id.networkGuideFragment)
-                "Acceso Web" -> findNavController().navigate(R.id.webAccessFragment)
-                "Sync Web ↔ Teléfono" -> findNavController().navigate(R.id.deviceSyncFragment)
-                "Añadir conexión" -> findNavController().navigate(R.id.addConnectionFragment)
-                "Interconexión (visor IP)" -> findNavController().navigate(R.id.interconnectFragment)
-                "Seguridad 2FA" -> findNavController().navigate(R.id.securityFragment)
-                "Alertas de intrusión" -> findNavController().navigate(R.id.intrusionFragment)
-                "Permisos / ACL" -> findNavController().navigate(R.id.permissionsFragment)
-                "Logs técnicos" -> findNavController().navigate(R.id.logsFragment)
-                "Config. backups" -> findNavController().navigate(R.id.backupConfigFragment)
-                "Recuperación" -> findNavController().navigate(R.id.recoveryFragment)
-                "Automatización IA" -> findNavController().navigate(R.id.aiAutomationFragment)
-                "Privacidad IA" -> findNavController().navigate(R.id.aiPrivacyFragment)
-                "Terminal / Rigo" -> findNavController().navigate(R.id.terminalFragment)
-                "Módulos y requisitos" -> findNavController().navigate(R.id.modulesConfigFragment)
-                "Instalador modular" -> findNavController().navigate(R.id.installerFragment)
-                "Idioma ES/EN" -> findNavController().navigate(R.id.languageFragment)
-                "Permiso almacenamiento" -> requestStoragePermissions()
-            }
+        binding.recycler.adapter = SimpleAdapter(rows.map { it.title to it.sub }) { pos ->
+            rows[pos].action?.invoke()
         }
     }
+
 
     private fun hasReadPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

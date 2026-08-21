@@ -266,6 +266,8 @@ class AiFragment : Fragment() {
             "transfers" -> R.id.transfersFragment
             "interconnect" -> R.id.interconnectFragment
             "collab" -> R.id.collabFragment
+            "cleanup" -> R.id.cleanupFragment
+            "adblock" -> R.id.adBlockFragment
             else -> null
         }
         if (id != null) {

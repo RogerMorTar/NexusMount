@@ -9,6 +9,8 @@
         <item android:id="@+id/backupFragment" android:title="Backups" android:icon="@android:drawable/ic_menu_revert" />
         <item android:id="@+id/interconnectFragment" android:title="Interconexión (visor)" android:icon="@android:drawable/ic_menu_view" />
         <item android:id="@+id/collabFragment" android:title="Trabajo colaborativo" android:icon="@android:drawable/ic_menu_my_calendar" />
+        <item android:id="@+id/cleanupFragment" android:title="Limpieza inteligente" android:icon="@android:drawable/ic_menu_delete" />
+        <item android:id="@+id/adBlockFragment" android:title="Bloqueo de anuncios" android:icon="@android:drawable/ic_menu_close_clear_cancel" />
         <item android:id="@+id/aiFragment" android:title="Rigo · Asistente IA" android:icon="@android:drawable/ic_menu_edit" />
     </group>
 
