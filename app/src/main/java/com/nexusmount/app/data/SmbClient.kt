@@ -1,31 +1,29 @@
 package com.nexusmount.app.data
 
+import com.hierynomus.msdtyp.AccessMask
+import com.hierynomus.msfscc.FileAttributes
+import com.hierynomus.msfscc.fileinformation.FileIdBothDirectoryInformation
+import com.hierynomus.mssmb2.SMB2CreateDisposition
+import com.hierynomus.mssmb2.SMB2CreateOptions
+import com.hierynomus.mssmb2.SMB2Dialect
+import com.hierynomus.mssmb2.SMB2ShareAccess
+import com.hierynomus.protocol.commons.EnumWithValue
 import com.hierynomus.smbj.SMBClient
 import com.hierynomus.smbj.SmbConfig
 import com.hierynomus.smbj.auth.AuthenticationContext
 import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.session.Session
 import com.hierynomus.smbj.share.DiskShare
-import com.hierynomus.mssmb2.SMB2Dialect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.net.InetSocketAddress
-import java.net.Socket
-import java.util.UUID
-import java.util.concurrent.TimeUnit
-import com.hierynomus.msdtyp.AccessMask
-import com.hierynomus.msfscc.FileAttributes
-import com.hierynomus.mssmb2.SMB2CreateDisposition
-import com.hierynomus.mssmb2.SMB2ShareAccess
-import com.hierynomus.smbj.share.File as SmbFile
 import java.io.File
 import java.io.FileOutputStream
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.EnumSet
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
-
-/**
- * Cliente SMB robusto para Android (Tailscale / LAN).
- */
 object SmbHelper {
 
     data class SmbResult(
@@ -37,18 +35,25 @@ object SmbHelper {
     )
 
     private val COMMON_SHARES = listOf(
-        "share", "Shared", "Share", "public", "Public", "data", "Data", "Datos",
-        "media", "Media", "homes", "Users", "user", "documents", "Documents",
-        "backup", "Backups", "nas", "NAS", "files", "Files", "smb", "storage",
-        "videos", "Fotos", "fotos", "music", "Music",
-        "C$", "D$", "E$", "F$"
+        "Users", "users", "User", "user",
+        "share", "Share", "Shared", "shared", "SHARE",
+        "public", "Public", "PUBLIC",
+        "data", "Data", "Datos", "datos", "DATA",
+        "Documents", "Documentos", "documents",
+        "Downloads", "Descargas",
+        "Videos", "videos", "Music", "music", "Pictures", "Fotos", "fotos",
+        "media", "Media", "homes", "home",
+        "backup", "Backup", "Backups", "backups",
+        "nas", "NAS", "files", "Files", "storage", "Storage",
+        "smb", "SMB", "disk", "Disk",
+        "C$", "D$", "E$", "F$", "G$", "H$"
     )
 
-    private fun buildConfig(): SmbConfig {
+    private fun config(signing: Boolean): SmbConfig {
         return SmbConfig.builder()
-            .withTimeout(30, TimeUnit.SECONDS)
-            .withSoTimeout(30, TimeUnit.SECONDS)
-            .withTransactTimeout(30, TimeUnit.SECONDS)
+            .withTimeout(45, TimeUnit.SECONDS)
+            .withSoTimeout(45, TimeUnit.SECONDS)
+            .withTransactTimeout(45, TimeUnit.SECONDS)
             .withDialects(
                 SMB2Dialect.SMB_3_1_1,
                 SMB2Dialect.SMB_3_0_2,
@@ -57,20 +62,19 @@ object SmbHelper {
                 SMB2Dialect.SMB_2_0_2
             )
             .withMultiProtocolNegotiate(true)
-            .withSigningRequired(false)
+            .withSigningRequired(signing)
+            .withDfsEnabled(true)
             .build()
     }
 
-    /** Comprueba TCP 445 antes de SMB. */
-    fun tcpProbe(host: String, port: Int = 445, timeoutMs: Int = 8000): Pair<Boolean, String> {
+    fun tcpProbe(host: String, port: Int = 445, timeoutMs: Int = 10000): Pair<Boolean, String> {
         return try {
             Socket().use { socket ->
                 socket.connect(InetSocketAddress(host.trim(), port), timeoutMs)
             }
             true to "Puerto $port abierto en $host"
         } catch (e: Exception) {
-            false to "No hay conexión TCP a $host:$port — ${e.message}. " +
-                "¿Tailscale conectado en ambos? ¿Firewall del PC bloquea SMB?"
+            false to "No hay TCP a $host:$port (${e.message}). Tailscale + firewall SMB."
         }
     }
 
@@ -78,97 +82,115 @@ object SmbHelper {
         val list = mutableListOf<AuthenticationContext>()
         val user = username.trim()
         val dom = domain.trim()
-
+        val pass = password.toCharArray()
         if (user.isNotEmpty()) {
-            // usuario + dominio explícito
-            list.add(AuthenticationContext(user, password.toCharArray(), dom))
-            // usuario sin dominio
-            if (dom.isNotEmpty()) {
-                list.add(AuthenticationContext(user, password.toCharArray(), ""))
-            }
-            // DOMAIN\user partido
+            list.add(AuthenticationContext(user, pass, dom))
+            list.add(AuthenticationContext(user, pass, ""))
+            list.add(AuthenticationContext(user, pass, "WORKGROUP"))
+            if (dom.isNotEmpty()) list.add(AuthenticationContext(user, pass, dom.uppercase()))
             if (user.contains("\\")) {
-                val parts = user.split("\\", limit = 2)
-                list.add(AuthenticationContext(parts[1], password.toCharArray(), parts[0]))
+                val p = user.split("\\", limit = 2)
+                list.add(AuthenticationContext(p[1], pass, p[0]))
             }
-            // user@domain
             if (user.contains("@")) {
-                val parts = user.split("@", limit = 2)
-                list.add(AuthenticationContext(parts[0], password.toCharArray(), parts[1]))
+                val p = user.split("@", limit = 2)
+                list.add(AuthenticationContext(p[0], pass, p[1]))
             }
         }
-        // Invitado / anónimo (muchos NAS lo permiten en lectura)
         try { list.add(AuthenticationContext.guest()) } catch (_: Throwable) {
             list.add(AuthenticationContext("Guest", CharArray(0), ""))
         }
         try { list.add(AuthenticationContext.anonymous()) } catch (_: Throwable) {
             list.add(AuthenticationContext("", CharArray(0), ""))
         }
-        return list.distinctBy { "${it.username}|${it.domain}|${it.password.concatToString()}" }
+        return list.distinctBy { "${it.username}|${it.domain}|${String(it.password)}" }
     }
 
-    private fun connectWithAuth(
+    private fun connectSession(
         host: String,
         username: String,
         password: String,
         domain: String
     ): Triple<SMBClient, Connection, Session> {
-        val client = SMBClient(buildConfig())
-        val connection = client.connect(host.trim())
         var last: Exception? = null
-        for (auth in authVariants(username, password, domain)) {
+        for (signing in listOf(false, true)) {
+            val client = SMBClient(config(signing))
             try {
-                val session = connection.authenticate(auth)
-                return Triple(client, connection, session)
+                val connection = client.connect(host.trim())
+                for (auth in authVariants(username, password, domain)) {
+                    try {
+                        val session = connection.authenticate(auth)
+                        return Triple(client, connection, session)
+                    } catch (e: Exception) {
+                        last = e
+                    }
+                }
+                try { connection.close() } catch (_: Exception) {}
             } catch (e: Exception) {
                 last = e
             }
+            try { client.close() } catch (_: Exception) {}
         }
-        try { connection.close() } catch (_: Exception) {}
-        try { client.close() } catch (_: Exception) {}
-        throw last ?: Exception("Autenticación fallida")
+        throw last ?: Exception("No se pudo autenticar en $host")
+    }
+
+    private fun closeAll(client: SMBClient?, connection: Connection?, session: Session?) {
+        try { session?.close() } catch (_: Exception) {}
+        try { connection?.close() } catch (_: Exception) {}
+        try { client?.close() } catch (_: Exception) {}
     }
 
     private fun friendlyError(e: Exception, host: String): String {
-        val m = (e.message ?: e.javaClass.simpleName).lowercase()
         val raw = e.message ?: e.javaClass.simpleName
+        val m = raw.lowercase()
         return when {
             m.contains("timeout") || m.contains("timed out") ->
-                "Tiempo de espera agotado con $host.\n• Activa Tailscale en el móvil y en el PC\n• Usa la IP 100.x del PC (app Tailscale → Machines)\n• Comprueba que el PC no esté suspendido"
-            m.contains("unreachable") || m.contains("enroute") || m.contains("network is unreachable") ->
-                "Red inalcanzable ($host).\n• Tailscale debe estar Connected en ambos dispositivos\n• Misma cuenta Tailscale"
+                "Tiempo agotado con $host. Tailscale Connected + PC despierto + IP 100.x."
+            m.contains("unreachable") ->
+                "Red inalcanzable ($host). Misma cuenta Tailscale."
             m.contains("refused") || m.contains("econnrefused") ->
-                "Conexión rechazada en $host:445.\n• Samba/Compartir archivos activo en el PC\n• Firewall de Windows: permitir SMB (puerto 445)"
+                "Rechazado $host:445. Activa compartir archivos / Samba."
             m.contains("logon") || m.contains("access denied") || m.contains("status_logon") ||
-                m.contains("authentication") || m.contains("unauthorized") ->
-                "Usuario o contraseña incorrectos (o el PC no acepta este tipo de acceso).\n• En Windows: usuario de la cuenta local o Microsoft\n• Prueba dominio vacío\n• En algunos NAS: usuario del NAS, no el de Windows"
-            m.contains("negotiate") || m.contains("dialect") || m.contains("smb") ->
-                "Problema de protocolo SMB con $host.\n• Activa SMB 2/3 en el PC (Windows: características de SMB)"
+                m.contains("authentication") || m.contains("status_access") ->
+                "Acceso denegado. Usuario/clave de la cuenta LOCAL del PC. Dominio vacio si no aplica."
+            m.contains("object_name_not_found") || m.contains("not found") ||
+                m.contains("bad_network_name") || m.contains("path_not_covered") ->
+                "El share o la carpeta no existe con ese nombre.\n" +
+                    "En el PC: Propiedades → Compartir → nombre EXACTO del recurso (no C:\\Users\\...)."
+            m.contains("negotiate") || m.contains("dialect") ->
+                "SMB incompatible. Activa SMB 2/3 en el PC."
             m.contains("resolve") || m.contains("unknown host") ->
-                "No se resuelve el host «$host». Usa la IP numérica (100.x.x.x o 192.168.x.x)."
+                "Host desconocido. Usa IP numerica."
             else -> "Error: $raw"
+        }
+    }
+
+    private fun isDirectory(info: FileIdBothDirectoryInformation): Boolean {
+        return try {
+            EnumWithValue.EnumUtils.isSet(
+                info.fileAttributes,
+                FileAttributes.FILE_ATTRIBUTE_DIRECTORY
+            )
+        } catch (_: Exception) {
+            try {
+                val v = info.fileAttributes
+                when (v) {
+                    is Long -> (v and 0x10L) != 0L
+                    is Number -> (v.toLong() and 0x10L) != 0L
+                    else -> v.toString().contains("DIRECTORY", ignoreCase = true)
+                }
+            } catch (_: Exception) {
+                false
+            }
         }
     }
 
     suspend fun diagnose(host: String): SmbResult = withContext(Dispatchers.IO) {
         val h = host.trim()
-        if (h.isEmpty()) return@withContext SmbResult(false, "IP vacía")
+        if (h.isEmpty()) return@withContext SmbResult(false, "IP vacia")
         val (ok445, msg445) = tcpProbe(h, 445)
-        val (ok139, msg139) = tcpProbe(h, 139, 3000)
-        val text = buildString {
-            appendLine("Diagnóstico de $h")
-            appendLine("• $msg445")
-            appendLine("• Puerto 139: ${if (ok139) "abierto" else "cerrado/no responde"}")
-            if (!ok445) {
-                appendLine()
-                appendLine("Sin puerto 445 no se puede usar Samba.")
-                appendLine("Revisa Tailscale + firewall del PC.")
-            } else {
-                appendLine()
-                appendLine("El puerto 445 responde. Si falla el login, revisa usuario/clave.")
-            }
-        }
-        SmbResult(ok445, text, detail = msg445)
+        SmbResult(ok445, "Diagnostico de $h\n• $msg445\n" +
+            if (!ok445) "Sin 445 no hay Samba." else "445 OK. Si falla listado: usuario o nombre de share.")
     }
 
     suspend fun testConnection(
@@ -179,29 +201,25 @@ object SmbHelper {
         domain: String = ""
     ): SmbResult = withContext(Dispatchers.IO) {
         val h = host.trim()
+        val s = share.trim().trim('/')
         val (tcpOk, tcpMsg) = tcpProbe(h)
         if (!tcpOk) return@withContext SmbResult(false, tcpMsg)
-
         var client: SMBClient? = null
         var connection: Connection? = null
         var session: Session? = null
         try {
-            val triple = connectWithAuth(h, username, password, domain)
-            client = triple.first
-            connection = triple.second
-            session = triple.third
-            val disk = session.connectShare(share.trim()) as DiskShare
-            // prueba listar raíz
-            try {
-                disk.list("").take(3)
-            } catch (_: Exception) {}
-            SmbResult(true, "Conectado a //$h/${share.trim()}")
+            val t = connectSession(h, username, password, domain)
+            client = t.first; connection = t.second; session = t.third
+            val disk = session.connectShare(s) as DiskShare
+            val entries = disk.list("").filter {
+                val n = it.fileName ?: ""
+                n.isNotEmpty() && n != "." && n != ".."
+            }
+            SmbResult(true, "Conectado a //$h/$s (${entries.size} elementos en raiz)")
         } catch (e: Exception) {
             SmbResult(false, friendlyError(e, h), detail = e.message ?: "")
         } finally {
-            try { session?.close() } catch (_: Exception) {}
-            try { connection?.close() } catch (_: Exception) {}
-            try { client?.close() } catch (_: Exception) {}
+            closeAll(client, connection, session)
         }
     }
 
@@ -214,38 +232,37 @@ object SmbHelper {
         val h = host.trim()
         val (tcpOk, tcpMsg) = tcpProbe(h)
         if (!tcpOk) return@withContext SmbResult(false, tcpMsg)
-
         var client: SMBClient? = null
         var connection: Connection? = null
         var session: Session? = null
         try {
-            val triple = connectWithAuth(h, username, password, domain)
-            client = triple.first
-            connection = triple.second
-            session = triple.third
-
+            val t = connectSession(h, username, password, domain)
+            client = t.first; connection = t.second; session = t.third
             val found = linkedSetOf<String>()
-            tryEnumerateShares(session, found)
-
+            var lastShareErr = ""
             for (name in COMMON_SHARES) {
                 try {
                     val sh = session.connectShare(name)
                     try {
-                        found.add(name)
+                        if (sh is DiskShare) {
+                            try { sh.list("").take(1) } catch (_: Exception) {}
+                            found.add(name)
+                        } else found.add(name)
                     } finally {
                         try { sh.close() } catch (_: Exception) {}
                     }
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    lastShareErr = "$name: ${(e.message ?: "").take(100)}"
                 }
             }
-
             val list = found.toList().sorted()
             if (list.isEmpty()) {
                 SmbResult(
                     false,
-                    "Login OK en $h, pero no se encontró ningún share.\n" +
-                        "En el PC: crea una carpeta compartida (ej. «share») y vuelve a listar,\n" +
-                        "o escribe el nombre exacto del recurso en «Share manual»."
+                    "Login OK en $h, pero no se detecto ningun share conocido.\n\n" +
+                        "Pon el nombre EXACTO del recurso en «Share manual».\n" +
+                        "Windows: carpeta → Propiedades → Compartir → nombre del recurso.\n\n" +
+                        "Ultimo error: $lastShareErr"
                 )
             } else {
                 SmbResult(true, "${list.size} recurso(s) en $h", shares = list)
@@ -253,38 +270,7 @@ object SmbHelper {
         } catch (e: Exception) {
             SmbResult(false, friendlyError(e, h), detail = e.message ?: "")
         } finally {
-            try { session?.close() } catch (_: Exception) {}
-            try { connection?.close() } catch (_: Exception) {}
-            try { client?.close() } catch (_: Exception) {}
-        }
-    }
-
-    private fun tryEnumerateShares(session: Session, out: MutableSet<String>) {
-        try {
-            val m = session.javaClass.methods.firstOrNull {
-                it.name.equals("getShares", true) || it.name.equals("listShares", true)
-            }
-            if (m != null && m.parameterCount == 0) {
-                when (val result = m.invoke(session)) {
-                    is Collection<*> -> result.forEach { extractShareName(it)?.let { n -> out.add(n) } }
-                    is Array<*> -> result.forEach { extractShareName(it)?.let { n -> out.add(n) } }
-                }
-            }
-        } catch (_: Exception) {}
-    }
-
-    private fun extractShareName(item: Any?): String? {
-        if (item == null) return null
-        if (item is String) return item.takeIf { it.isNotBlank() && !it.equals("IPC$", true) }
-        return try {
-            val m = item.javaClass.methods.firstOrNull {
-                it.name.equals("getNetName", true) ||
-                    it.name.equals("getName", true) ||
-                    it.name.equals("getShareName", true)
-            }
-            (m?.invoke(item) as? String)?.takeIf { it.isNotBlank() && !it.equals("IPC$", true) }
-        } catch (_: Exception) {
-            null
+            closeAll(client, connection, session)
         }
     }
 
@@ -300,36 +286,35 @@ object SmbHelper {
         var connection: Connection? = null
         var session: Session? = null
         try {
-            val triple = connectWithAuth(host, username, password, domain)
-            client = triple.first
-            connection = triple.second
-            session = triple.third
-            val disk = session.connectShare(share) as DiskShare
-            val remotePath = path.trim('/').ifEmpty { "" }
-            val list = disk.list(remotePath).mapNotNull { info ->
-                val name = info.fileName ?: return@mapNotNull null
-                if (name == "." || name == "..") return@mapNotNull null
-                FileEntry(
-                    name = name,
-                    isDirectory = info.fileAttributes?.and(0x10L) != 0L,
-                    sizeBytes = info.endOfFile ?: 0L,
-                    path = if (remotePath.isEmpty()) name else "$remotePath/$name"
-                )
+            val t = connectSession(host, username, password, domain)
+            client = t.first; connection = t.second; session = t.third
+            val disk = session.connectShare(share.trim()) as DiskShare
+            val remotePath = path.trim().trim('/').replace('\\', '/')
+            val rawList: List<FileIdBothDirectoryInformation> = try {
+                disk.list(remotePath)
+            } catch (e: Exception) {
+                disk.list(remotePath.replace('/', '\\'))
             }
-            SmbResult(true, "OK", files = list)
+            val list = rawList.mapNotNull { info ->
+                val name = info.fileName ?: return@mapNotNull null
+                if (name == "." || name == ".." || name.isBlank()) return@mapNotNull null
+                val dir = isDirectory(info)
+                val size = try { info.endOfFile } catch (_: Exception) { 0L }
+                val childPath = if (remotePath.isEmpty()) name else "$remotePath/$name"
+                FileEntry(name = name, isDirectory = dir, sizeBytes = size, path = childPath)
+            }.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+            SmbResult(
+                true,
+                if (list.isEmpty()) "Carpeta vacia o sin permiso de listado" else "OK (${list.size})",
+                files = list
+            )
         } catch (e: Exception) {
             SmbResult(false, friendlyError(e, host), detail = e.message ?: "")
         } finally {
-            try { session?.close() } catch (_: Exception) {}
-            try { connection?.close() } catch (_: Exception) {}
-            try { client?.close() } catch (_: Exception) {}
+            closeAll(client, connection, session)
         }
     }
 
-
-    /**
-     * Descarga un archivo del share a un fichero local (caché).
-     */
     suspend fun downloadFile(
         host: String,
         share: String,
@@ -344,27 +329,16 @@ object SmbHelper {
         var connection: Connection? = null
         var session: Session? = null
         try {
-            val triple = connectWithAuth(host, username, password, domain)
-            client = triple.first
-            connection = triple.second
-            session = triple.third
+            val t = connectSession(host, username, password, domain)
+            client = t.first; connection = t.second; session = t.third
             val disk = session.connectShare(share) as DiskShare
-            val path = remotePath.trimStart('/')
+            val path = remotePath.trim().trimStart('/').replace('\\', '/')
             destFile.parentFile?.mkdirs()
-
             val access = EnumSet.of(AccessMask.GENERIC_READ, AccessMask.FILE_READ_DATA)
             val attrs = EnumSet.of(FileAttributes.FILE_ATTRIBUTE_NORMAL)
             val shareAccess = EnumSet.of(SMB2ShareAccess.FILE_SHARE_READ)
-            val options = EnumSet.noneOf(com.hierynomus.mssmb2.SMB2CreateOptions::class.java)
-
-            disk.openFile(
-                path,
-                access,
-                attrs,
-                shareAccess,
-                SMB2CreateDisposition.FILE_OPEN,
-                options
-            ).use { smbFile ->
+            val options = EnumSet.noneOf(SMB2CreateOptions::class.java)
+            disk.openFile(path, access, attrs, shareAccess, SMB2CreateDisposition.FILE_OPEN, options).use { smbFile ->
                 val total = try { smbFile.fileInformation.standardInformation.endOfFile } catch (_: Exception) { 0L }
                 smbFile.inputStream.use { input ->
                     FileOutputStream(destFile).use { output ->
@@ -386,9 +360,7 @@ object SmbHelper {
         } catch (e: Exception) {
             SmbResult(false, friendlyError(e, host), detail = e.message ?: "")
         } finally {
-            try { session?.close() } catch (_: Exception) {}
-            try { connection?.close() } catch (_: Exception) {}
-            try { client?.close() } catch (_: Exception) {}
+            closeAll(client, connection, session)
         }
     }
 
@@ -405,23 +377,18 @@ object SmbHelper {
         var connection: Connection? = null
         var session: Session? = null
         try {
-            val triple = connectWithAuth(host, username, password, domain)
-            client = triple.first
-            connection = triple.second
-            session = triple.third
+            val t = connectSession(host, username, password, domain)
+            client = t.first; connection = t.second; session = t.third
             val disk = session.connectShare(share) as DiskShare
-            val path = remotePath.trimStart('/')
+            val path = remotePath.trim().trimStart('/').replace('\\', '/')
             if (isDirectory) disk.rmdir(path, true) else disk.rm(path)
             SmbResult(true, "Eliminado: $path")
         } catch (e: Exception) {
             SmbResult(false, friendlyError(e, host), detail = e.message ?: "")
         } finally {
-            try { session?.close() } catch (_: Exception) {}
-            try { connection?.close() } catch (_: Exception) {}
-            try { client?.close() } catch (_: Exception) {}
+            closeAll(client, connection, session)
         }
     }
-
 
     fun createDriveFromSmb(name: String, host: String, share: String): DriveItem =
         DriveItem(
