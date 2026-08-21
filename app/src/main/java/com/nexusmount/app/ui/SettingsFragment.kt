@@ -1,7 +1,6 @@
 package com.nexusmount.app.ui
 
 import android.Manifest
-import android.app.AlertDialog
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -15,13 +14,9 @@ import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexusmount.app.R
-import com.nexusmount.app.cloud.CloudConnectors
 import com.nexusmount.app.databinding.FragmentListBinding
 import com.nexusmount.app.util.TailscaleUtil
 
-/**
- * Punto único de configuración: agrupa todas las pantallas de ajustes.
- */
 class SettingsFragment : Fragment() {
 
     private var _binding: FragmentListBinding? = null
@@ -30,12 +25,8 @@ class SettingsFragment : Fragment() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
-        val ok = result.values.any { it }
-        Toast.makeText(
-            requireContext(),
-            if (ok || hasReadPermission()) "Permisos actualizados" else "Permiso denegado",
-            Toast.LENGTH_SHORT
-        ).show()
+        val ok = result.values.any { it } || hasReadPermission()
+        Toast.makeText(requireContext(), if (ok) "Permisos actualizados" else "Permiso denegado", Toast.LENGTH_SHORT).show()
         refresh()
     }
 
@@ -83,7 +74,7 @@ class SettingsFragment : Fragment() {
             "Módulos y requisitos" to "Drive, S3, WebDAV, keys",
             "Instalador modular" to "Activar/desactivar módulos",
             "Idioma ES/EN" to "Preferencia de idioma",
-            "Permiso almacenamiento" to if (hasReadPermission()) "Concedido ✓" else "Pendiente — tocar o usar botón"
+            "Permiso almacenamiento" to if (hasReadPermission()) "Concedido ✓" else "Pendiente"
         )
         binding.recycler.layoutManager = LinearLayoutManager(requireContext())
         binding.recycler.adapter = SimpleAdapter(items) { pos ->
@@ -109,7 +100,6 @@ class SettingsFragment : Fragment() {
                 "Idioma ES/EN" -> findNavController().navigate(R.id.languageFragment)
                 "Permiso almacenamiento" -> requestStoragePermissions()
             }
-        }
         }
     }
 
@@ -139,11 +129,7 @@ class SettingsFragment : Fragment() {
                         )
                     )
                 } catch (_: Exception) {
-                    Toast.makeText(
-                        requireContext(),
-                        "Ajustes → Apps → NexusMount → Permisos",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(requireContext(), "Ajustes → Apps → NexusMount → Permisos", Toast.LENGTH_LONG).show()
                 }
             }
         } else {
