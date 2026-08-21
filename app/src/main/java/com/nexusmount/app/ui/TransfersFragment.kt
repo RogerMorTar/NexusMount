@@ -58,7 +58,7 @@ class TransfersFragment : Fragment() {
             rows.add("Sin transferencias" to "Pulsa «Nueva transferencia» o copia desde el explorador SMB")
         } else {
             list.take(40).forEach {
-                rows.add(it.name to "${it.status} · ${it.progress}% · ${it.fromPath} → ${it.toPath}")
+                rows.add(it.name to "${it.status} · ${it.progress}% · ${it.from} → ${it.to}")
             }
         }
         binding.recycler.layoutManager = LinearLayoutManager(requireContext())
