@@ -10,23 +10,25 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexusmount.app.NexusApp
+import com.nexusmount.app.R
 import com.nexusmount.app.data.FileEntry
 import com.nexusmount.app.data.SmbHelper
-import com.nexusmount.app.databinding.FragmentListBinding
-import com.nexusmount.app.transfer.TransferManager
 import com.nexusmount.app.data.TransferItem
+import com.nexusmount.app.databinding.FragmentListBinding
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
 /**
- * Explorador tipo Explorer: carpetas, abrir archivos con apps del sistema,
- * copiar al móvil, eliminar.
+ * Explorador SMB tipo Explorer.
+ * Atrás del sistema: sube carpeta o sale a Mis Unidades.
  */
 class SmbBrowserFragment : Fragment() {
     private var _binding: FragmentListBinding? = null
@@ -57,34 +59,62 @@ class SmbBrowserFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.titleText.text = "//$host/$share"
-        binding.primaryAction.text = "↑ Subir / Acciones"
-        binding.primaryAction.setOnClickListener { showRootActions() }
+        updateActionButton()
+        binding.primaryAction.setOnClickListener { onPrimaryAction() }
+
+        // Botón atrás del sistema / gesto
+        requireActivity().onBackPressedDispatcher.addCallback(
+            viewLifecycleOwner,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    navigateBack()
+                }
+            }
+        )
+
         load()
+    }
+
+    private fun updateActionButton() {
+        if (pathStack.isEmpty()) {
+            binding.primaryAction.text = "← Salir a Mis Unidades"
+        } else {
+            binding.primaryAction.text = "↑ Subir carpeta"
+        }
+    }
+
+    private fun onPrimaryAction() {
+        navigateBack()
+    }
+
+    /** Sube un nivel o sale del explorador SMB. */
+    private fun navigateBack() {
+        if (pathStack.isNotEmpty()) {
+            pathStack.removeAt(pathStack.lastIndex)
+            updateActionButton()
+            load()
+        } else {
+            // Salir a la lista de unidades
+            try {
+                findNavController().navigate(R.id.drivesFragment)
+            } catch (e: Exception) {
+                try {
+                    findNavController().popBackStack()
+                } catch (_: Exception) {
+                    toast("Usa el menú ☰ → Mis Unidades")
+                }
+            }
+        }
     }
 
     private fun currentPath(): String = pathStack.joinToString("/")
 
-    private fun showRootActions() {
-        AlertDialog.Builder(requireContext())
-            .setTitle("Explorador SMB")
-            .setItems(arrayOf("Subir un nivel", "Actualizar", "Ir a la raíz")) { _, w ->
-                when (w) {
-                    0 -> {
-                        if (pathStack.isNotEmpty()) {
-                            pathStack.removeAt(pathStack.lastIndex)
-                            load()
-                        } else toast("Ya estás en la raíz")
-                    }
-                    1 -> load()
-                    2 -> { pathStack.clear(); load() }
-                }
-            }
-            .show()
-    }
-
     private fun load() {
+        updateActionButton()
         val remote = currentPath()
-        binding.subtitleText.text = if (remote.isEmpty()) "/  ·  toca carpeta o archivo" else "/$remote"
+        binding.subtitleText.text =
+            if (remote.isEmpty()) "/  ·  atrás o «Salir» para volver"
+            else "/$remote  ·  atrás = subir"
         binding.emptyText.visibility = View.VISIBLE
         binding.emptyText.text = "Cargando…"
         viewLifecycleOwner.lifecycleScope.launch {
@@ -104,12 +134,13 @@ class SmbBrowserFragment : Fragment() {
             binding.recycler.adapter = SimpleAdapter(
                 files.map {
                     val icon = if (it.isDirectory) "📁 " else "📄 "
-                    icon + it.name to if (it.isDirectory) "Carpeta · tocar para abrir" else "${formatSize(it.sizeBytes)} · tocar para abrir"
+                    icon + it.name to if (it.isDirectory) "Carpeta" else "${formatSize(it.sizeBytes)} · abrir"
                 }
             ) { pos ->
                 val f = files[pos]
                 if (f.isDirectory) {
                     pathStack.add(f.name)
+                    updateActionButton()
                     load()
                 } else {
                     showFileMenu(f)
@@ -154,13 +185,23 @@ class SmbBrowserFragment : Fragment() {
                 toast(result.message)
                 return@launch
             }
-            // Registrar transferencia
             try {
                 val repo = (requireActivity().application as NexusApp).repository
                 val list = repo.getTransfers()
-                list.add(0, TransferItem(UUID.randomUUID().toString(), f.name, "//$host/$share", dest.absolutePath, 100, "completed"))
+                list.add(
+                    0,
+                    TransferItem(
+                        UUID.randomUUID().toString(),
+                        f.name,
+                        "//$host/$share",
+                        dest.absolutePath,
+                        100,
+                        "completed"
+                    )
+                )
                 repo.saveTransfers(list)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
 
             val uri = try {
                 FileProvider.getUriForFile(
@@ -180,7 +221,7 @@ class SmbBrowserFragment : Fragment() {
             try {
                 startActivity(Intent.createChooser(intent, "Abrir ${f.name} con"))
             } catch (e: ActivityNotFoundException) {
-                toast("No hay app para abrir este tipo de archivo ($mime)")
+                toast("No hay app para este tipo de archivo")
             } catch (e: Exception) {
                 toast("No se pudo abrir: ${e.message}")
             }
@@ -195,18 +236,14 @@ class SmbBrowserFragment : Fragment() {
                 ?: requireContext().filesDir
             val dest = File(dir, f.name)
             val result = SmbHelper.downloadFile(host, share, user, pass, f.path, dest, domain)
-            if (result.success) {
-                toast("Guardado en: ${dest.absolutePath}")
-            } else {
-                toast(result.message)
-            }
+            toast(if (result.success) "Guardado: ${dest.absolutePath}" else result.message)
         }
     }
 
     private fun confirmDelete(f: FileEntry) {
         AlertDialog.Builder(requireContext())
             .setTitle("¿Eliminar ${f.name}?")
-            .setMessage("Se borrará del servidor Samba. No se puede deshacer.")
+            .setMessage("Se borrará del servidor. No se puede deshacer.")
             .setPositiveButton("Eliminar") { _, _ ->
                 viewLifecycleOwner.lifecycleScope.launch {
                     val r = SmbHelper.deleteRemote(host, share, user, pass, f.path, f.isDirectory, domain)
@@ -226,17 +263,11 @@ class SmbBrowserFragment : Fragment() {
                 "jpg", "jpeg" -> "image/jpeg"
                 "png" -> "image/png"
                 "gif" -> "image/gif"
-                "webp" -> "image/webp"
                 "mp4" -> "video/mp4"
-                "mkv" -> "video/x-matroska"
                 "mp3" -> "audio/mpeg"
                 "pdf" -> "application/pdf"
-                "txt", "log", "md" -> "text/plain"
-                "doc", "docx" -> "application/msword"
-                "xls", "xlsx" -> "application/vnd.ms-excel"
-                "ppt", "pptx" -> "application/vnd.ms-powerpoint"
+                "txt", "log" -> "text/plain"
                 "zip" -> "application/zip"
-                "apk" -> "application/vnd.android.package-archive"
                 else -> "application/octet-stream"
             }
     }
@@ -248,7 +279,8 @@ class SmbBrowserFragment : Fragment() {
         return "${b / (1024 * 1024 * 1024)} GB"
     }
 
-    private fun toast(m: String) = Toast.makeText(requireContext(), m, Toast.LENGTH_SHORT).show()
+    private fun toast(m: String) =
+        Toast.makeText(requireContext(), m, Toast.LENGTH_SHORT).show()
 
     override fun onDestroyView() {
         super.onDestroyView()
