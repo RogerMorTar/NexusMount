@@ -56,12 +56,12 @@ class TransfersFragment : Fragment() {
         } else {
             binding.emptyText.visibility = View.GONE
             binding.recycler.adapter = SimpleAdapter(
-                list.map { "${it.name} · ${it.progress}%" to "${it.status} · ${it.fromPath} → ${it.toPath}" }
+                list.map { "${it.name} · ${it.progress}%" to "${it.status} · ${it.from} → ${it.to}" }
             ) { pos ->
                 val t = list[pos]
                 AlertDialog.Builder(requireContext())
                     .setTitle(t.name)
-                    .setMessage("Estado: ${t.status}\n${t.fromPath}\n→\n${t.toPath}")
+                    .setMessage("Estado: ${t.status}\n${t.from}\n→\n${t.to}")
                     .setPositiveButton("OK", null)
                     .setNegativeButton("Quitar del historial") { _, _ ->
                         val next = list.toMutableList().also { it.removeAt(pos) }
