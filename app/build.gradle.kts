@@ -11,13 +11,33 @@ android {
         applicationId = "com.nexusmount.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "4.5.0"
+        versionCode = 46
+        versionName = "4.5.46"
+    }
+
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore/nexusmount-debug.jks")
+            storePassword = "android"
+            keyAlias = "nexusmount"
+            keyPassword = "android"
+        }
+        getByName("debug") {
+            storeFile = file("keystore/nexusmount-debug.jks")
+            storePassword = "android"
+            keyAlias = "nexusmount"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
