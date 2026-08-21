@@ -18,7 +18,9 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexusmount.app.NexusApp
 import com.nexusmount.app.R
+import com.nexusmount.app.data.DriveItem
 import com.nexusmount.app.data.DriveStatus
+import com.nexusmount.app.data.DriveType
 import com.nexusmount.app.data.SmbHelper
 import com.nexusmount.app.databinding.FragmentListBinding
 import kotlinx.coroutines.Job
@@ -31,6 +33,9 @@ class DrivesFragment : Fragment() {
     private lateinit var adapter: SimpleAdapter
     private var listJob: Job? = null
     private val handler = Handler(Looper.getMainLooper())
+    private var drivesCache: List<DriveItem> = emptyList()
+
+    private val repo get() = (requireActivity().application as NexusApp).repository
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentListBinding.inflate(inflater, container, false)
@@ -38,88 +43,97 @@ class DrivesFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
         binding.titleText.text = "Mis Unidades"
-        binding.subtitleText.text = "Toca una unidad SMB para explorar · menú ⋮ para borrar"
-        binding.primaryAction.text = "Añadir Samba (auto-listar)"
+        binding.primaryAction.text = "+ Añadir otra carpeta Samba"
         binding.primaryAction.setOnClickListener { showAddSmbDialog() }
 
         adapter = SimpleAdapter(emptyList()) { pos ->
-            val drives = (requireActivity().application as NexusApp).repository.getDrives()
-            if (pos !in drives.indices) return@SimpleAdapter
-            val d = drives[pos]
-            showDriveInfo(d.id, d.name, d.type.name, d.path, d.status.name)
+            if (pos !in drivesCache.indices) return@SimpleAdapter
+            showDriveInfo(drivesCache[pos])
         }
         binding.recycler.layoutManager = LinearLayoutManager(requireContext())
         binding.recycler.adapter = adapter
         refresh()
     }
 
-    private fun refresh() {
-        val drives = (requireActivity().application as NexusApp).repository.getDrives()
-        adapter.submit(drives.map {
-            it.name to "${it.type} · ${it.status} · ${it.path}"
-        })
-        binding.emptyText.visibility = if (drives.isEmpty()) View.VISIBLE else View.GONE
-        binding.emptyText.text = getString(R.string.no_drives)
+    override fun onResume() {
+        super.onResume()
+        if (_binding != null) refresh()
     }
 
-    /** Ventana de info: Abrir / Cerrar. Eliminar y Actualizar en menú oculto ⋮ */
-    private fun showDriveInfo(id: String, name: String, type: String, path: String, status: String) {
-        val ctx = requireContext()
-        val msg = "$type\n$path\n$status"
-        AlertDialog.Builder(ctx)
-            .setTitle(name)
-            .setMessage(msg)
-            .setPositiveButton("Abrir / explorar") { _, _ ->
-                openDrive(id, path)
+    private fun refresh() {
+        drivesCache = repo.getDrives()
+        val smb = drivesCache.count { it.type == DriveType.SMB }
+        val local = drivesCache.count { it.type == DriveType.LOCAL }
+        binding.subtitleText.text =
+            "Vista general: $smb Samba · $local local · ${drivesCache.size} en total\n" +
+                "Toca una para abrir · ⋮ Más para actualizar/eliminar"
+
+        // Orden: SMB primero, luego local
+        val ordered = drivesCache.sortedWith(
+            compareBy<DriveItem> { if (it.type == DriveType.SMB) 0 else 1 }
+                .thenBy { it.name.lowercase() }
+        )
+        drivesCache = ordered
+
+        adapter.submit(ordered.map { d ->
+            val tag = when (d.type) {
+                DriveType.SMB -> "📁 SMB"
+                DriveType.LOCAL -> "📱 Local"
+                else -> d.type.name
             }
-            .setNeutralButton("⋮ Más") { _, _ ->
-                showHiddenMenu(id, name, path)
-            }
+            "$tag  ${d.name}" to "${d.status} · ${d.path}"
+        })
+        binding.emptyText.visibility = if (ordered.isEmpty()) View.VISIBLE else View.GONE
+        binding.emptyText.text = "No hay unidades.\nPulsa «+ Añadir otra carpeta Samba»."
+    }
+
+    private fun showDriveInfo(d: DriveItem) {
+        AlertDialog.Builder(requireContext())
+            .setTitle(d.name)
+            .setMessage("${d.type}\n${d.path}\n${d.status}")
+            .setPositiveButton("Abrir / explorar") { _, _ -> openDrive(d) }
+            .setNeutralButton("⋮ Más") { _, _ -> showHiddenMenu(d) }
             .setNegativeButton("Cerrar", null)
             .show()
     }
 
-    private fun showHiddenMenu(id: String, name: String, path: String) {
+    private fun showHiddenMenu(d: DriveItem) {
         AlertDialog.Builder(requireContext())
-            .setTitle("Opciones · $name")
-            .setItems(arrayOf("Actualizar conexión", "Eliminar unidad")) { _, which ->
+            .setTitle("Opciones · ${d.name}")
+            .setItems(arrayOf("Actualizar conexión", "Eliminar de la lista")) { _, which ->
                 when (which) {
                     0 -> {
-                        // Re-test SMB if path looks like //host/share
-                        val m = Regex("""^//([^/]+)/(.+)$""").find(path)
-                        if (m != null) {
-                            val host = m.groupValues[1]
-                            val share = m.groupValues[2]
-                            val prefs = requireContext().getSharedPreferences("smb_creds", 0)
-                            val user = prefs.getString("${id}_user", "") ?: ""
-                            val pass = prefs.getString("${id}_pass", "") ?: ""
-                            val domain = prefs.getString("${id}_domain", "") ?: ""
-                            Toast.makeText(requireContext(), "Comprobando…", Toast.LENGTH_SHORT).show()
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                val r = SmbHelper.testConnection(host, share, user, pass, domain)
-                                Toast.makeText(requireContext(), r.message, Toast.LENGTH_LONG).show()
-                                if (r.success) {
-                                    (requireActivity().application as NexusApp).repository.updateDrive(id) {
-                                        it.copy(status = DriveStatus.ONLINE)
-                                    }
-                                    refresh()
-                                }
+                        val m = Regex("""^//([^/]+)/(.+)$""").find(d.path)
+                        if (m == null) {
+                            toast("Solo para unidades SMB")
+                            return@setItems
+                        }
+                        val host = m.groupValues[1]
+                        val share = m.groupValues[2]
+                        val prefs = requireContext().getSharedPreferences("smb_creds", 0)
+                        val user = prefs.getString("${d.id}_user", "") ?: ""
+                        val pass = prefs.getString("${d.id}_pass", "") ?: ""
+                        val domain = prefs.getString("${d.id}_domain", "") ?: ""
+                        toast("Comprobando…")
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val r = SmbHelper.testConnection(host, share, user, pass, domain)
+                            toast(r.message)
+                            if (r.success) {
+                                repo.updateDrive(d.id) { it.copy(status = DriveStatus.ONLINE) }
+                                refresh()
                             }
-                        } else {
-                            Toast.makeText(requireContext(), "Solo para unidades SMB", Toast.LENGTH_SHORT).show()
                         }
                     }
                     1 -> {
                         AlertDialog.Builder(requireContext())
-                            .setTitle("¿Eliminar $name?")
-                            .setMessage("Se quitará de la lista (no borra datos del servidor).")
+                            .setTitle("¿Quitar ${d.name}?")
+                            .setMessage("Solo se elimina de la lista del teléfono, no del servidor.")
                             .setPositiveButton("Eliminar") { _, _ ->
-                                (requireActivity().application as NexusApp).repository.removeDrive(id)
+                                repo.removeDrive(d.id)
                                 requireContext().getSharedPreferences("smb_creds", 0).edit()
-                                    .remove("${id}_user").remove("${id}_pass")
-                                    .remove("${id}_domain").remove("${id}_host").remove("${id}_share")
+                                    .remove("${d.id}_user").remove("${d.id}_pass")
+                                    .remove("${d.id}_domain").remove("${d.id}_host").remove("${d.id}_share")
                                     .apply()
                                 refresh()
                             }
@@ -132,21 +146,22 @@ class DrivesFragment : Fragment() {
             .show()
     }
 
-    private fun openDrive(id: String, path: String) {
-        val m = Regex("""^//([^/]+)/(.+)$""").find(path)
+    private fun openDrive(d: DriveItem) {
+        val m = Regex("""^//([^/]+)/(.+)$""").find(d.path)
         if (m == null) {
-            // Local path → files fragment
             findNavController().navigate(R.id.filesFragment)
             return
         }
         val host = m.groupValues[1]
         val share = m.groupValues[2]
         val prefs = requireContext().getSharedPreferences("smb_creds", 0)
-        val user = prefs.getString("${id}_user", "") ?: ""
-        val pass = prefs.getString("${id}_pass", "") ?: ""
-        val domain = prefs.getString("${id}_domain", "") ?: ""
-        val args = SmbBrowserFragment.args(host, share, user, pass, domain)
-        findNavController().navigate(R.id.smbBrowserFragment, args)
+        val user = prefs.getString("${d.id}_user", "") ?: ""
+        val pass = prefs.getString("${d.id}_pass", "") ?: ""
+        val domain = prefs.getString("${d.id}_domain", "") ?: ""
+        findNavController().navigate(
+            R.id.smbBrowserFragment,
+            SmbBrowserFragment.args(host, share, user, pass, domain)
+        )
     }
 
     private fun showAddSmbDialog() {
@@ -155,10 +170,9 @@ class DrivesFragment : Fragment() {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 24, 48, 8)
         }
-        fun field(hint: String, value: String = ""): EditText {
+        fun field(hint: String): EditText {
             return EditText(ctx).apply {
                 this.hint = hint
-                setText(value)
                 setTextColor(0xFFDAE2FD.toInt())
                 setHintTextColor(0xFF8C909F.toInt())
                 layout.addView(this)
@@ -171,12 +185,12 @@ class DrivesFragment : Fragment() {
         }
         val domain = field("Dominio (opcional)")
         val status = EditText(ctx).apply {
-            setText("Escribe la IP: al pausar se listarán los shares solos")
+            setText("Puedes añadir varias carpetas. Cada share = una entrada en la lista.")
             isEnabled = false
             setTextColor(0xFF8C909F.toInt())
             layout.addView(this)
         }
-        val shareManual = field("Share manual (si hace falta)")
+        val shareManual = field("Share manual (si no lista)")
 
         var debounce: Runnable? = null
         host.addTextChangedListener(object : TextWatcher {
@@ -191,15 +205,11 @@ class DrivesFragment : Fragment() {
                     listJob?.cancel()
                     listJob = viewLifecycleOwner.lifecycleScope.launch {
                         val result = SmbHelper.listShares(
-                            h,
-                            user.text.toString(),
-                            pass.text.toString(),
-                            domain.text.toString()
+                            h, user.text.toString(), pass.text.toString(), domain.text.toString()
                         )
                         if (!isAdded) return@launch
                         if (result.success && result.shares.isNotEmpty()) {
                             status.setText("Encontrados: ${result.shares.joinToString()}")
-                            // Auto show picker
                             showSharePicker(
                                 h,
                                 user.text.toString(),
@@ -208,7 +218,7 @@ class DrivesFragment : Fragment() {
                                 result.shares
                             )
                         } else {
-                            status.setText(result.message.take(120))
+                            status.setText(result.message.take(140))
                         }
                     }
                 }
@@ -218,12 +228,12 @@ class DrivesFragment : Fragment() {
         })
 
         AlertDialog.Builder(ctx)
-            .setTitle("Samba / SMB")
+            .setTitle("Añadir carpeta Samba")
             .setView(layout)
-            .setPositiveButton("Listar ahora") { _, _ ->
+            .setPositiveButton("Listar shares") { _, _ ->
                 val h = host.text.toString().trim()
                 if (h.isEmpty()) {
-                    Toast.makeText(ctx, "IP obligatoria", Toast.LENGTH_SHORT).show()
+                    toast("IP obligatoria")
                     return@setPositiveButton
                 }
                 viewLifecycleOwner.lifecycleScope.launch {
@@ -231,7 +241,10 @@ class DrivesFragment : Fragment() {
                         h, user.text.toString(), pass.text.toString(), domain.text.toString()
                     )
                     if (result.success && result.shares.isNotEmpty()) {
-                        showSharePicker(h, user.text.toString(), pass.text.toString(), domain.text.toString(), result.shares)
+                        showSharePicker(
+                            h, user.text.toString(), pass.text.toString(),
+                            domain.text.toString(), result.shares
+                        )
                     } else {
                         showError("Listado", result.message)
                         val sm = shareManual.text.toString().trim()
@@ -252,7 +265,7 @@ class DrivesFragment : Fragment() {
                 val h = host.text.toString().trim()
                 val s = shareManual.text.toString().trim()
                 if (h.isEmpty() || s.isEmpty()) {
-                    Toast.makeText(ctx, "IP y share obligatorios", Toast.LENGTH_SHORT).show()
+                    toast("IP y share obligatorios")
                     return@setNegativeButton
                 }
                 connectAndSave(h, s, user.text.toString(), pass.text.toString(), domain.text.toString())
@@ -269,8 +282,9 @@ class DrivesFragment : Fragment() {
     }
 
     private fun showSharePicker(host: String, user: String, pass: String, domain: String, shares: List<String>) {
+        // Multi-select style: pick one, then offer add another
         AlertDialog.Builder(requireContext())
-            .setTitle("Compartidos en $host")
+            .setTitle("Elige carpeta compartida ($host)")
             .setItems(shares.toTypedArray()) { _, which ->
                 connectAndSave(host, shares[which], user, pass, domain)
             }
@@ -279,31 +293,50 @@ class DrivesFragment : Fragment() {
     }
 
     private fun connectAndSave(host: String, share: String, user: String, pass: String, domain: String) {
-        val ctx = requireContext()
-        Toast.makeText(ctx, "Conectando //$host/$share …", Toast.LENGTH_SHORT).show()
+        toast("Conectando //$host/$share …")
         viewLifecycleOwner.lifecycleScope.launch {
             val result = SmbHelper.testConnection(host, share, user, pass, domain)
-            if (result.success) {
-                val drive = SmbHelper.createDriveFromSmb("SMB $host/$share", host, share)
-                    .copy(status = DriveStatus.ONLINE)
-                (requireActivity().application as NexusApp).repository.addDrive(drive)
-                ctx.getSharedPreferences("smb_creds", 0).edit()
+            if (!result.success) {
+                showError("Error de conexión", result.message)
+                return@launch
+            }
+            val drive = SmbHelper.createDriveFromSmb("SMB $host/$share", host, share)
+                .copy(status = DriveStatus.ONLINE)
+            val added = repo.addDrive(drive)
+            if (!added) {
+                toast("Esa carpeta ya estaba en la lista")
+                refresh()
+            } else {
+                requireContext().getSharedPreferences("smb_creds", 0).edit()
                     .putString("${drive.id}_user", user)
                     .putString("${drive.id}_pass", pass)
                     .putString("${drive.id}_domain", domain)
                     .putString("${drive.id}_host", host)
                     .putString("${drive.id}_share", share)
                     .apply()
-                Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
+                toast("Añadida: //$host/$share")
                 refresh()
-                // Open browser immediately
-                val args = SmbBrowserFragment.args(host, share, user, pass, domain)
-                findNavController().navigate(R.id.smbBrowserFragment, args)
-            } else {
-                showError("Error de conexión", result.message)
             }
+            // Preguntar: explorar o añadir más (no fuerza salir de la lista)
+            AlertDialog.Builder(requireContext())
+                .setTitle("Carpeta conectada")
+                .setMessage("//$host/$share\n\n¿Qué quieres hacer?")
+                .setPositiveButton("Explorar ahora") { _, _ ->
+                    findNavController().navigate(
+                        R.id.smbBrowserFragment,
+                        SmbBrowserFragment.args(host, share, user, pass, domain)
+                    )
+                }
+                .setNeutralButton("Añadir otra") { _, _ ->
+                    showAddSmbDialog()
+                }
+                .setNegativeButton("Ver lista") { _, _ -> refresh() }
+                .show()
         }
     }
+
+    private fun toast(m: String) =
+        Toast.makeText(requireContext(), m, Toast.LENGTH_SHORT).show()
 
     override fun onDestroyView() {
         super.onDestroyView()

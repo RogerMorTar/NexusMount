@@ -6,10 +6,6 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.util.UUID
 
-/**
- * Persistencia local de unidades y transferencias.
- * Las conexiones SMB reales se manejan en SmbClient.
- */
 class DriveRepository(context: Context) {
 
     private val prefs: SharedPreferences =
@@ -17,12 +13,17 @@ class DriveRepository(context: Context) {
     private val gson = Gson()
 
     fun getDrives(): MutableList<DriveItem> {
-        val json = prefs.getString("drives", null) ?: return defaultDrives()
+        val json = prefs.getString("drives", null)
+        if (json == null) {
+            val defaults = defaultDrives()
+            saveDrives(defaults)
+            return defaults
+        }
         val type = object : TypeToken<MutableList<DriveItem>>() {}.type
         return try {
-            gson.fromJson(json, type) ?: defaultDrives()
+            gson.fromJson<MutableList<DriveItem>>(json, type) ?: mutableListOf()
         } catch (_: Exception) {
-            defaultDrives()
+            mutableListOf()
         }
     }
 
@@ -30,10 +31,15 @@ class DriveRepository(context: Context) {
         prefs.edit().putString("drives", gson.toJson(drives)).apply()
     }
 
-    fun addDrive(drive: DriveItem) {
+    /** Añade unidad. Si ya existe el mismo path, no duplica y devuelve false. */
+    fun addDrive(drive: DriveItem): Boolean {
         val list = getDrives()
+        if (list.any { it.path.equals(drive.path, ignoreCase = true) }) {
+            return false
+        }
         list.add(drive)
         saveDrives(list)
+        return true
     }
 
     fun updateDrive(id: String, transform: (DriveItem) -> DriveItem) {
@@ -44,6 +50,8 @@ class DriveRepository(context: Context) {
     fun removeDrive(id: String) {
         saveDrives(getDrives().filter { it.id != id })
     }
+
+    fun smbCount(): Int = getDrives().count { it.type == DriveType.SMB }
 
     fun getTransfers(): MutableList<TransferItem> {
         val json = prefs.getString("transfers", null) ?: return mutableListOf()
@@ -66,8 +74,8 @@ class DriveRepository(context: Context) {
             type = DriveType.LOCAL,
             path = "/storage/emulated/0",
             status = DriveStatus.ONLINE,
-            usedGb = 32.0,
-            totalGb = 128.0
+            usedGb = 0.0,
+            totalGb = 0.0
         )
     )
 }
