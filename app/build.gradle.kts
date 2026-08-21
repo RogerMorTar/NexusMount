@@ -70,6 +70,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     // SMB client for real network shares
     implementation("com.hierynomus:smbj:0.13.0")
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("org.slf4j:slf4j-android:1.7.36")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("androidx.drawerlayout:drawerlayout:1.2.0")
