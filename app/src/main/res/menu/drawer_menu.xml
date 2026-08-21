@@ -3,45 +3,20 @@
 
     <group android:id="@+id/g_main" android:checkableBehavior="single">
         <item android:id="@+id/dashboardFragment" android:title="Dashboard" android:icon="@android:drawable/ic_menu_view" />
-        <item android:id="@+id/addConnectionFragment" android:title="Añadir conexión" android:icon="@android:drawable/ic_input_add" />
         <item android:id="@+id/drivesFragment" android:title="Mis Unidades" android:icon="@android:drawable/ic_menu_save" />
         <item android:id="@+id/filesFragment" android:title="Explorador Pro" android:icon="@android:drawable/ic_menu_agenda" />
         <item android:id="@+id/transfersFragment" android:title="Transferencias" android:icon="@android:drawable/ic_menu_upload" />
-    </group>
-
-    <group android:id="@+id/g_backup" android:checkableBehavior="single">
         <item android:id="@+id/backupFragment" android:title="Backups" android:icon="@android:drawable/ic_menu_revert" />
-        <item android:id="@+id/backupConfigFragment" android:title="Config. backups" android:icon="@android:drawable/ic_menu_recent_history" />
-        <item android:id="@+id/recoveryFragment" android:title="Recuperación" android:icon="@android:drawable/ic_menu_rotate" />
-    </group>
-
-    <group android:id="@+id/g_ai" android:checkableBehavior="single">
+        <item android:id="@+id/collabFragment" android:title="Trabajo colaborativo" android:icon="@android:drawable/ic_menu_my_calendar" />
         <item android:id="@+id/aiFragment" android:title="Rigo · Asistente IA" android:icon="@android:drawable/ic_menu_edit" />
-        <item android:id="@+id/aiAutomationFragment" android:title="Automatización IA" android:icon="@android:drawable/ic_menu_sort_by_size" />
-        <item android:id="@+id/aiPrivacyFragment" android:title="Privacidad IA" android:icon="@android:drawable/ic_menu_info_details" />
-        <item android:id="@+id/terminalFragment" android:title="Terminal / Rigo" android:icon="@android:drawable/ic_menu_always_landscape_portrait" />
-    </group>
-
-    <group android:id="@+id/g_sec" android:checkableBehavior="single">
-        <item android:id="@+id/securityFragment" android:title="Seguridad 2FA" android:icon="@android:drawable/ic_lock_lock" />
-        <item android:id="@+id/intrusionFragment" android:title="Alertas intrusión" android:icon="@android:drawable/ic_menu_compass" />
-        <item android:id="@+id/permissionsFragment" android:title="Permisos / ACL" android:icon="@android:drawable/ic_menu_manage" />
-        <item android:id="@+id/logsFragment" android:title="Logs técnicos" android:icon="@android:drawable/ic_menu_info_details" />
     </group>
 
     <group android:id="@+id/g_net" android:checkableBehavior="single">
-        <item android:id="@+id/sambaFragment" android:title="Samba / Red" android:icon="@android:drawable/ic_menu_share" />
+        <item android:id="@+id/sambaFragment" android:title="Samba / SMB" android:icon="@android:drawable/ic_menu_share" />
         <item android:id="@+id/tailscaleFragment" android:title="Tailscale VPN" android:icon="@android:drawable/ic_menu_mylocation" />
-        <item android:id="@+id/deviceSyncFragment" android:title="Sync Web ↔ Teléfono" android:icon="@android:drawable/ic_menu_upload" />
-        <item android:id="@+id/networkGuideFragment" android:title="Guía de red" android:icon="@android:drawable/ic_menu_mapmode" />
-        <item android:id="@+id/webAccessFragment" android:title="Acceso Web" android:icon="@android:drawable/ic_menu_compass" />
-        <item android:id="@+id/collabFragment" android:title="Colaborativo" android:icon="@android:drawable/ic_menu_my_calendar" />
     </group>
 
     <group android:id="@+id/g_cfg" android:checkableBehavior="single">
-        <item android:id="@+id/modulesConfigFragment" android:title="Módulos y requisitos" android:icon="@android:drawable/ic_menu_manage" />
-        <item android:id="@+id/installerFragment" android:title="Instalador modular" android:icon="@android:drawable/ic_menu_add" />
-        <item android:id="@+id/languageFragment" android:title="Idioma ES/EN" android:icon="@android:drawable/ic_menu_sort_alphabetically" />
-        <item android:id="@+id/settingsFragment" android:title="Ajustes" android:icon="@android:drawable/ic_menu_preferences" />
+        <item android:id="@+id/settingsFragment" android:title="Ajustes y configuración" android:icon="@android:drawable/ic_menu_preferences" />
     </group>
 </menu>

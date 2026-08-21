@@ -14,28 +14,48 @@ class TailscaleFragment : Fragment() {
     private val binding get() = _binding!!
 
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
-        _binding = FragmentListBinding.inflate(i, c, false); return binding.root
+        _binding = FragmentListBinding.inflate(i, c, false)
+        return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.titleText.text = "Tailscale VPN"
-        binding.subtitleText.text = "Estado real de la red mesh"
-        binding.primaryAction.text = "Abrir app Tailscale"
-        binding.primaryAction.setOnClickListener { TailscaleUtil.openTailscale(requireContext()) }
+        binding.subtitleText.text = "Estado detectado en este teléfono"
+        binding.primaryAction.text = "Actualizar / Abrir Tailscale"
+        binding.primaryAction.setOnClickListener {
+            refresh()
+            TailscaleUtil.openTailscale(requireContext())
+        }
+        refresh()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (_binding != null) refresh()
+    }
+
+    private fun refresh() {
         val installed = TailscaleUtil.isInstalled(requireContext())
         val vpn = TailscaleUtil.hasVpnActive(requireContext())
         val ips = TailscaleUtil.getTailscaleIpv4()
         val lines = mutableListOf(
-            "Instalado" to if (installed) "Sí" else "No — instala desde Play Store",
-            "VPN activa" to if (vpn) "Sí" else "No detectada",
+            "Instalado" to if (installed) "Sí" else "No detectado (¿permiso de visibilidad?)",
+            "Paquete" to (TailscaleUtil.installedPackage(requireContext()) ?: "—"),
+            "VPN activa" to if (vpn) "Sí" else "No",
         )
-        if (ips.isEmpty()) lines.add("IPs 100.x" to "Ninguna (conecta Tailscale)")
-        else ips.forEach { lines.add("IP Tailscale" to it) }
-        lines.add("Uso" to "En Unidades → SMB usa la IP 100.x del NAS/PC")
-        lines.add("Red" to "No inventada: datos del sistema")
+        if (ips.isEmpty()) {
+            lines.add("IPs 100.x" to "Ninguna — abre Tailscale y pulsa Connect")
+        } else {
+            ips.forEach { lines.add("IP Tailscale" to it) }
+        }
+        lines.add("Uso con Samba" to "En Mis Unidades usa la IP 100.x del PC (app Tailscale → Machines)")
+        lines.add("Resumen completo" to TailscaleUtil.statusSummary(requireContext()).replace("\n", " | "))
         binding.recycler.layoutManager = LinearLayoutManager(requireContext())
         binding.recycler.adapter = SimpleAdapter(lines)
     }
 
-    override fun onDestroyView() { super.onDestroyView(); _binding = null }
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
 }
