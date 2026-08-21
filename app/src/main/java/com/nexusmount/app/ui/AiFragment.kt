@@ -2,7 +2,6 @@ package com.nexusmount.app.ui
 
 import android.os.Bundle
 import android.os.Environment
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -22,9 +21,6 @@ import com.nexusmount.app.util.TailscaleUtil
 import com.nexusmount.app.zip.ZipUtils
 import java.io.File
 
-/**
- * Chat con Rigo — asistente bajo solicitud.
- */
 class AiFragment : Fragment() {
 
     private lateinit var logView: TextView
@@ -46,29 +42,38 @@ class AiFragment : Fragment() {
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
         val sub = TextView(ctx).apply {
-            text = "IA local · control bajo solicitud · ES"
+            text = "IA local ampliada · archivos · red · app"
             setTextColor(0xFF2DD4BF.toInt())
             textSize = 13f
             setPadding(0, 4, 0, 12)
         }
 
-        val quick = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        fun chip(label: String, cmd: String) {
+        val quick = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        val quick2 = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+        }
+        fun chip(parent: LinearLayout, label: String, cmd: String) {
             val b = MaterialButton(ctx, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
                 text = label
                 textSize = 11f
                 setOnClickListener { runCommand(cmd) }
-                setPadding(16, 0, 16, 0)
+                setPadding(12, 0, 12, 0)
             }
-            quick.addView(b)
+            parent.addView(b)
         }
-        chip("Hola", "hola")
-        chip("Estado", "estado")
-        chip("Ayuda", "ayuda")
-        chip("Backup", "backup")
+        chip(quick, "Hola", "hola")
+        chip(quick, "Estado", "estado")
+        chip(quick, "Unidades", "unidades")
+        chip(quick, "Ayuda", "ayuda")
+        chip(quick2, "Backup", "backup")
+        chip(quick2, "Espacio", "espacio libre")
+        chip(quick2, "Tailscale", "tailscale")
+        chip(quick2, "Transfer", "transferencias")
 
         val input = EditText(ctx).apply {
-            hint = "Escribe a Rigo… (ej: busca pdf, abrir unidades)"
+            hint = "Ej: busca pdf · archivos grandes · abrir interconexión"
             setTextColor(0xFFDAE2FD.toInt())
             setHintTextColor(0xFF8C909F.toInt())
             minLines = 1
@@ -96,9 +101,8 @@ class AiFragment : Fragment() {
             input.text.clear()
         }
 
-        // Cloud toggle note
         val cloudNote = TextView(ctx).apply {
-            text = "IA Cloud (Gemini/OpenAI): configúrala en Módulos y requisitos. Por defecto Rigo es 100% local."
+            text = "Rigo es local. IA Cloud (Gemini/OpenAI) se configura en Ajustes → Módulos."
             setTextColor(0xFF8C909F.toInt())
             textSize = 11f
             setPadding(0, 8, 0, 0)
@@ -107,14 +111,15 @@ class AiFragment : Fragment() {
         root.addView(title)
         root.addView(sub)
         root.addView(quick)
+        root.addView(quick2)
         root.addView(input)
         root.addView(btn)
-        root.addView(scroll, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-        ))
+        root.addView(
+            scroll,
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+        )
         root.addView(cloudNote)
 
-        // Prefer readable cwd
         val emulated = File("/storage/emulated/0")
         cwd = when {
             emulated.canRead() && emulated.listFiles() != null -> emulated
@@ -126,19 +131,63 @@ class AiFragment : Fragment() {
 
     private fun runCommand(cmd: String) {
         when (val action = CommandAI.parse(cmd)) {
-            is CommandAI.Action.Help -> append("\n\nRigo: ${action.text}")
-            is CommandAI.Action.Chat -> append("\n\nRigo: ${action.text}")
+            is CommandAI.Action.Help -> append("\n\nRigo:\n${action.text}")
+            is CommandAI.Action.Chat -> append("\n\nRigo:\n${action.text}")
             is CommandAI.Action.Status -> {
                 val repo = (requireActivity().application as NexusApp).repository
                 val drives = repo.getDrives()
-                val ts = TailscaleUtil.statusSummary(requireContext()).lines().take(2).joinToString(" · ")
+                val ts = TailscaleUtil.statusSummary(requireContext()).lines().take(3).joinToString("\n  ")
                 append(
-                    "\n\nRigo: Estado\n" +
-                        "• Unidades: ${drives.size}\n" +
+                    "\n\nRigo · Estado\n" +
+                        "• Unidades: ${drives.size} (${drives.count { it.type.name == "SMB" }} SMB)\n" +
                         "• Transferencias: ${repo.getTransfers().size}\n" +
-                        "• Carpeta actual: ${cwd.absolutePath}\n" +
-                        "• $ts"
+                        "• Carpeta: ${cwd.absolutePath}\n" +
+                        "• Tailscale:\n  $ts"
                 )
+            }
+            is CommandAI.Action.ListDrives -> {
+                val drives = (requireActivity().application as NexusApp).repository.getDrives()
+                if (drives.isEmpty()) append("\n\nRigo: No hay unidades.")
+                else append(
+                    "\n\nRigo · Unidades:\n" +
+                        drives.joinToString("\n") { "• ${it.name} [${it.type}] ${it.status}\n  ${it.path}" }
+                )
+            }
+            is CommandAI.Action.TransferHint -> {
+                append(
+                    "\n\nRigo: Abro Transferencias. Ahí puedes iniciar copias SMB → teléfono " +
+                        "o ir a Interconexión."
+                )
+                navigateSection("transfers")
+            }
+            is CommandAI.Action.InterconnectHint -> {
+                append(
+                    "\n\nRigo: Interconexión = visor sin Samba (exponer disco o conectar por IP). " +
+                        "Solo ver/copiar. Te llevo allí."
+                )
+                navigateSection("interconnect")
+            }
+            is CommandAI.Action.CollabHint -> {
+                append(
+                    "\n\nRigo: En Colaborativo creas espacios, invitaciones, recursos SMB, " +
+                        "agenda y reuniones."
+                )
+                navigateSection("collab")
+            }
+            is CommandAI.Action.TailscaleStatus -> {
+                append("\n\nRigo · Tailscale:\n${TailscaleUtil.statusSummary(requireContext())}")
+            }
+            is CommandAI.Action.StorageInfo, is CommandAI.Action.FreeSpace -> {
+                append("\n\nRigo:\n${CommandAI.freeSpace(cwd)}")
+            }
+            is CommandAI.Action.CountFiles -> {
+                append("\n\nRigo:\n${CommandAI.countFiles(cwd)}")
+            }
+            is CommandAI.Action.LargestFiles -> {
+                append("\n\nRigo · Archivos más grandes:\n${CommandAI.largestFiles(cwd, action.n)}")
+            }
+            is CommandAI.Action.RecentFiles -> {
+                append("\n\nRigo · Archivos recientes:\n${CommandAI.recentFiles(cwd, action.n)}")
             }
             is CommandAI.Action.OpenSection -> {
                 append("\n\nRigo: Abriendo ${action.section}…")
@@ -149,11 +198,11 @@ class AiFragment : Fragment() {
                 val hits = com.nexusmount.app.search.FileSearch.search(
                     cwd,
                     com.nexusmount.app.search.SearchQuery(nameContains = action.query),
-                    30
+                    40
                 )
                 append(
                     "\n\nRigo: " + if (hits.isEmpty()) "Sin resultados para «${action.query}»"
-                    else hits.joinToString("\n") { it.path }
+                    else "Encontrados ${hits.size}:\n" + hits.joinToString("\n") { "• ${it.path}" }
                 )
             }
             is CommandAI.Action.Mkdir -> {
@@ -175,7 +224,7 @@ class AiFragment : Fragment() {
                 }
                 val dest = File(cwd, f.nameWithoutExtension + ".zip")
                 val r = ZipUtils.zip(listOf(f), dest)
-                append("\n\nRigo: " + if (r.isSuccess) "ZIP listo: ${dest.name}" else "Error ZIP")
+                append("\n\nRigo: " + if (r.isSuccess) "ZIP: ${dest.name}" else "Error ZIP")
             }
             is CommandAI.Action.Unzip -> {
                 val f = File(cwd, action.name)
@@ -185,7 +234,7 @@ class AiFragment : Fragment() {
                 }
                 val dest = File(cwd, f.nameWithoutExtension)
                 val r = ZipUtils.unzip(f, dest)
-                append("\n\nRigo: " + if (r.isSuccess) "Extraído en ${dest.name}" else "Error al extraer")
+                append("\n\nRigo: " + if (r.isSuccess) "Extraído en ${dest.name}" else "Error")
             }
             is CommandAI.Action.Backup -> {
                 val bm = BackupManager(requireContext())
@@ -213,13 +262,17 @@ class AiFragment : Fragment() {
             "modules" -> R.id.modulesConfigFragment
             "samba" -> R.id.sambaFragment
             "logs" -> R.id.logsFragment
+            "dashboard" -> R.id.dashboardFragment
+            "transfers" -> R.id.transfersFragment
+            "interconnect" -> R.id.interconnectFragment
+            "collab" -> R.id.collabFragment
             else -> null
         }
         if (id != null) {
             try {
                 findNavController().navigate(id)
             } catch (e: Exception) {
-                Toast.makeText(requireContext(), "No se pudo navegar: $section", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "No se pudo abrir: $section", Toast.LENGTH_SHORT).show()
             }
         }
     }
