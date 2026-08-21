@@ -99,9 +99,14 @@ class FilesFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // User may return from settings with all-files access granted
+        // Always refresh after returning from system settings
         if (hasFullStorageAccess()) {
             openBestRoot()
+            toast("Permiso de almacenamiento: concedido")
+        } else {
+            binding.subtitleText.text = (currentDir.absolutePath + " · SIN permiso completo")
+            binding.emptyText.visibility = android.view.View.VISIBLE
+            binding.emptyText.text = "Permiso pendiente. Acciones → Pedir permiso de todos los archivos, luego vuelve aquí."
         }
     }
 

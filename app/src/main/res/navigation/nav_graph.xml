@@ -30,4 +30,6 @@
     <fragment android:id="@+id/installerFragment" android:name="com.nexusmount.app.ui.InstallerFragment" android:label="Instalador" />
     <fragment android:id="@+id/languageFragment" android:name="com.nexusmount.app.ui.LanguageFragment" android:label="Idioma" />
     <fragment android:id="@+id/settingsFragment" android:name="com.nexusmount.app.ui.SettingsFragment" android:label="Ajustes" />
+    <fragment android:id="@+id/smbBrowserFragment" android:name="com.nexusmount.app.ui.SmbBrowserFragment" android:label="Explorar SMB" />
 </navigation>
+

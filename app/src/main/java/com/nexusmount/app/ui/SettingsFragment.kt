@@ -87,7 +87,9 @@ class SettingsFragment : Fragment() {
     }
 
     private fun hasReadPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= 33) {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.os.Environment.isExternalStorageManager()
+        } else if (Build.VERSION.SDK_INT >= 33) {
             ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
         } else {
             ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
@@ -110,6 +112,14 @@ class SettingsFragment : Fragment() {
         } else {
             val perms = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
             permissionLauncher.launch(perms)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Rebuild list so permission line updates after user grants access
+        if (_binding != null) {
+            try { onViewCreated(requireView(), null) } catch (_: Exception) {}
         }
     }
 
