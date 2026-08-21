@@ -2,7 +2,6 @@ package com.nexusmount.app.ui
 
 import android.app.AlertDialog
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -29,10 +28,7 @@ import java.net.URL
 import java.net.URLEncoder
 
 /**
- * Interconexión SIN Samba:
- * - Este dispositivo puede EXPONER su disco (HTTP solo lectura).
- * - Puede VER el disco de otro dispositivo NexusMount por IP (Wi‑Fi o Tailscale).
- * Solo ver y copiar. Editar/borrar = solo vía SMB en Mis Unidades.
+ * Interconexión sin Samba — IPs y exposición se guardan en preferencias.
  */
 class InterconnectFragment : Fragment() {
     private var _binding: FragmentListBinding? = null
@@ -43,12 +39,60 @@ class InterconnectFragment : Fragment() {
     private var pathStack = mutableListOf<String>()
     private var browsing = false
 
+    private fun prefs() = requireContext().getSharedPreferences("nexus_interconnect", 0)
+
+    private fun loadHistory(): MutableList<String> {
+        val raw = prefs().getString("history", "") ?: ""
+        return raw.split("\n").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+    }
+
+    private fun saveHistory(list: List<String>) {
+        prefs().edit().putString("history", list.distinct().take(20).joinToString("\n")).apply()
+    }
+
+    private fun rememberConnection(host: String, port: Int) {
+        prefs().edit().putString("last_host", host).putInt("last_port", port).apply()
+        val key = if (port == ReadOnlyShareServer.DEFAULT_PORT) host else "$host:$port"
+        val h = loadHistory()
+        h.removeAll { it.equals(key, true) || it.substringBefore(":") == host }
+        h.add(0, key)
+        saveHistory(h)
+    }
+
+    private fun lastHost() = prefs().getString("last_host", "") ?: ""
+    private fun lastPort() = prefs().getInt("last_port", ReadOnlyShareServer.DEFAULT_PORT)
+
+    private fun exposeRoot(): String =
+        prefs().getString("expose_root", "") ?: ""
+
+    private fun setExposeRoot(path: String) {
+        prefs().edit().putString("expose_root", path).apply()
+    }
+
+    private fun autoExpose() = prefs().getBoolean("auto_expose", false)
+    private fun setAutoExpose(v: Boolean) {
+        prefs().edit().putBoolean("auto_expose", v).apply()
+    }
+
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
         _binding = FragmentListBinding.inflate(i, c, false)
         return binding.root
     }
 
     override fun onViewCreated(v: View, s: Bundle?) {
+        // Restaurar última IP en memoria de sesión
+        val lh = lastHost()
+        if (lh.isNotEmpty()) {
+            remoteHost = lh
+            remotePort = lastPort()
+        }
+        if (autoExpose() && !ShareServerHolder.isRunning()) {
+            try {
+                val root = exposeRoot().takeIf { it.isNotEmpty() }?.let { File(it) }
+                ShareServerHolder.start(requireContext(), root)
+            } catch (_: Exception) {
+            }
+        }
         showHome()
     }
 
@@ -61,21 +105,26 @@ class InterconnectFragment : Fragment() {
         browsing = false
         pathStack.clear()
         binding.titleText.text = "Interconexión (visor)"
-        binding.subtitleText.text = "Sin Samba · solo ver/copiar · Wi‑Fi o Tailscale"
-        binding.primaryAction.text = if (ShareServerHolder.isRunning()) "Detener exposición" else "Exponer mi disco"
+        binding.subtitleText.text = "Configuración guardada · Wi‑Fi o Tailscale"
+        binding.primaryAction.text =
+            if (ShareServerHolder.isRunning()) "Detener exposición" else "Exponer mi disco"
         binding.primaryAction.setOnClickListener {
             if (ShareServerHolder.isRunning()) {
                 ShareServerHolder.stop()
+                setAutoExpose(false)
                 toast("Exposición detenida")
                 showHome()
             } else {
                 try {
-                    val msg = ShareServerHolder.start(requireContext())
+                    val rootPath = exposeRoot()
+                    val root = if (rootPath.isNotEmpty()) File(rootPath) else null
+                    val msg = ShareServerHolder.start(requireContext(), root)
+                    setAutoExpose(true)
                     AlertDialog.Builder(requireContext())
-                        .setTitle("Disco expuesto (solo lectura)")
+                        .setTitle("Disco expuesto (guardado)")
                         .setMessage(
-                            "$msg\n\nOtros dispositivos NexusMount → Interconexión → " +
-                                "ponen tu IP y puerto ${ReadOnlyShareServer.DEFAULT_PORT}."
+                            "$msg\n\nSe recordará al volver a esta pantalla si no la detienes.\n" +
+                                "Puerto ${ReadOnlyShareServer.DEFAULT_PORT}."
                         )
                         .setPositiveButton("OK", null)
                         .show()
@@ -87,28 +136,61 @@ class InterconnectFragment : Fragment() {
         }
 
         val ips = ReadOnlyShareServer.localIpv4()
+        val history = loadHistory()
         val lines = mutableListOf(
             "── En este dispositivo ──" to "",
             "Estado exposición" to if (ShareServerHolder.isRunning()) "ACTIVA (solo lectura)" else "Parada",
             "Mis IPs" to if (ips.isEmpty()) "—" else ips.joinToString(),
             "Puerto" to "${ReadOnlyShareServer.DEFAULT_PORT}",
             "── Ver otro dispositivo ──" to "",
-            "Conectar por IP" to "Tablet/PC/móvil con NexusMount exponiendo disco",
-            "Cómo funciona" to "No usa Samba. El otro equipo debe tener «Exponer mi disco» activo.",
-            "Editar o borrar archivos" to "Solo con SMB en Mis Unidades (compartido del PC/NAS)"
+            "Conectar por IP" to if (lastHost().isEmpty()) "Nueva conexión"
+            else "Última: ${lastHost()}:${lastPort()}",
+            "Reconectar última IP" to if (lastHost().isEmpty()) "Ninguna guardada"
+            else "${lastHost()}:${lastPort()}",
         )
+        if (history.isNotEmpty()) {
+            lines.add("── Guardadas ──" to "")
+            history.take(10).forEach { lines.add("📌 $it" to "Tocar para conectar") }
+        }
+        lines.add("Borrar historial de IPs" to "Limpia conexiones guardadas")
+        lines.add("Cómo funciona" to "Sin Samba · el otro equipo debe exponer el disco")
+
         binding.recycler.layoutManager = LinearLayoutManager(requireContext())
         binding.recycler.adapter = SimpleAdapter(lines) { pos ->
-            when (lines[pos].first) {
-                "Conectar por IP" -> connectDialog()
-                "Cómo funciona" -> AlertDialog.Builder(requireContext())
+            val label = lines[pos].first
+            when {
+                label == "Conectar por IP" -> connectDialog()
+                label == "Reconectar última IP" -> {
+                    val h = lastHost()
+                    if (h.isEmpty()) toast("No hay IP guardada")
+                    else {
+                        remoteHost = h
+                        remotePort = lastPort()
+                        pathStack.clear()
+                        browseRemote()
+                    }
+                }
+                label.startsWith("📌 ") -> {
+                    val raw = label.removePrefix("📌 ").trim()
+                    val parts = raw.split(":")
+                    remoteHost = parts[0]
+                    remotePort = parts.getOrNull(1)?.toIntOrNull()
+                        ?: ReadOnlyShareServer.DEFAULT_PORT
+                    rememberConnection(remoteHost, remotePort)
+                    pathStack.clear()
+                    browseRemote()
+                }
+                label == "Borrar historial de IPs" -> {
+                    prefs().edit().remove("history").remove("last_host").apply()
+                    toast("Historial borrado")
+                    showHome()
+                }
+                label == "Cómo funciona" -> AlertDialog.Builder(requireContext())
                     .setTitle("Interconexión")
                     .setMessage(
-                        "1. En el dispositivo A: Interconexión → Exponer mi disco.\n" +
-                            "2. Anota su IP (Wi‑Fi 192.168.x o Tailscale 100.x).\n" +
-                            "3. En el dispositivo B: Interconexión → Conectar por IP.\n" +
-                            "4. Solo puedes listar, abrir y copiar.\n" +
-                            "5. Para modificar: expón por Samba en el PC y usa Mis Unidades."
+                        "Las IPs que uses se guardan aquí.\n" +
+                            "«Reconectar última IP» evita escribirla otra vez.\n" +
+                            "En el PC, la carpeta y el puerto también se guardan al salir."
                     )
                     .setPositiveButton("OK", null)
                     .show()
@@ -122,13 +204,14 @@ class InterconnectFragment : Fragment() {
             setPadding(48, 24, 48, 8)
         }
         val host = EditText(requireContext()).apply {
-            hint = "IP (100.x Tailscale o 192.168.x Wi‑Fi)"
+            hint = "IP (100.x o 192.168.x)"
+            setText(lastHost())
             setTextColor(0xFFDAE2FD.toInt())
             setHintTextColor(0xFF8C909F.toInt())
         }
         val port = EditText(requireContext()).apply {
-            hint = "Puerto (por defecto ${ReadOnlyShareServer.DEFAULT_PORT})"
-            setText(ReadOnlyShareServer.DEFAULT_PORT.toString())
+            hint = "Puerto"
+            setText(lastPort().toString())
             setTextColor(0xFFDAE2FD.toInt())
             setHintTextColor(0xFF8C909F.toInt())
         }
@@ -136,9 +219,9 @@ class InterconnectFragment : Fragment() {
         box.addView(port)
         AlertDialog.Builder(requireContext())
             .setTitle("Ver disco remoto")
-            .setMessage("El otro dispositivo debe tener NexusMount con «Exponer mi disco» activo.")
+            .setMessage("La IP se guardará para la próxima vez.")
             .setView(box)
-            .setPositiveButton("Conectar") { _, _ ->
+            .setPositiveButton("Conectar y guardar") { _, _ ->
                 val h = host.text.toString().trim()
                 val p = port.text.toString().toIntOrNull() ?: ReadOnlyShareServer.DEFAULT_PORT
                 if (h.isEmpty()) {
@@ -147,6 +230,7 @@ class InterconnectFragment : Fragment() {
                 }
                 remoteHost = h
                 remotePort = p
+                rememberConnection(h, p)
                 pathStack.clear()
                 browseRemote()
             }
@@ -174,7 +258,8 @@ class InterconnectFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { fetchList(remoteHost, remotePort, path) }
             if (result == null) {
-                binding.emptyText.text = "No se pudo conectar a $remoteHost:$remotePort\n¿Exposición activa en el otro dispositivo?"
+                binding.emptyText.text =
+                    "No se pudo conectar a $remoteHost:$remotePort\n¿Exposición activa?"
                 binding.recycler.adapter = SimpleAdapter(emptyList())
                 return@launch
             }
@@ -192,9 +277,7 @@ class InterconnectFragment : Fragment() {
                 if (e.dir) {
                     pathStack.add(e.name)
                     browseRemote()
-                } else {
-                    fileMenu(e)
-                }
+                } else fileMenu(e)
             }
         }
     }
@@ -216,12 +299,7 @@ class InterconnectFragment : Fragment() {
             val arr = json.getJSONArray("entries")
             (0 until arr.length()).map { i ->
                 val o = arr.getJSONObject(i)
-                Entry(
-                    o.getString("name"),
-                    o.optBoolean("dir"),
-                    o.optLong("size"),
-                    o.optString("path")
-                )
+                Entry(o.getString("name"), o.optBoolean("dir"), o.optLong("size"), o.optString("path"))
             }
         } catch (_: Exception) {
             null
@@ -282,9 +360,7 @@ class InterconnectFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val destDir = requireContext().getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
                 ?: requireContext().filesDir
-            val file = withContext(Dispatchers.IO) {
-                downloadTo(e, File(destDir, e.name))
-            }
+            val file = withContext(Dispatchers.IO) { downloadTo(e, File(destDir, e.name)) }
             toast(if (file != null) "Guardado: ${file.absolutePath}" else "Error al copiar")
         }
     }

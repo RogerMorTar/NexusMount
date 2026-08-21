@@ -20,6 +20,28 @@ from typing import Optional
 
 from nexus_share_server import DEFAULT_PORT, local_ipv4, start_server
 
+CONFIG_DIR = Path.home() / ".nexusmount"
+CONFIG_FILE = CONFIG_DIR / "pc_config.json"
+
+
+def load_config() -> dict:
+    try:
+        if CONFIG_FILE.is_file():
+            return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def save_config(data: dict) -> None:
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        CONFIG_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        print("No se pudo guardar config:", e)
+
+
+
 APP_TITLE = "NexusMount PC · Interconexión"
 
 
@@ -31,15 +53,22 @@ class NexusMountPC(tk.Tk):
         self.minsize(640, 420)
         self.configure(bg="#0b1326")
 
+        self.cfg = load_config()
         self.server = None
         self.server_thread: Optional[threading.Thread] = None
-        self.share_root = Path.home()
-        self.remote_host = ""
-        self.remote_port = DEFAULT_PORT
+        self.share_root = Path(self.cfg.get("share_root") or str(Path.home()))
+        self.remote_host = str(self.cfg.get("last_remote_host") or "")
+        self.remote_port = int(self.cfg.get("last_remote_port") or DEFAULT_PORT)
+        self.auto_start = bool(self.cfg.get("auto_start_share", False))
         self.path_stack: list[str] = []
 
         self._build_ui()
         self._refresh_local_ips()
+        if self.auto_start and self.share_root.is_dir():
+            try:
+                self.after(400, self._start_share)
+            except Exception:
+                pass
 
     def _build_ui(self) -> None:
         style = ttk.Style(self)
@@ -77,7 +106,7 @@ class NexusMountPC(tk.Tk):
         row2 = ttk.Frame(f)
         row2.pack(fill=tk.X, padx=12, pady=4)
         ttk.Label(row2, text="Puerto:").pack(side=tk.LEFT)
-        self.port_var = tk.StringVar(value=str(DEFAULT_PORT))
+        self.port_var = tk.StringVar(value=str(self.cfg.get("share_port") or DEFAULT_PORT))
         ttk.Entry(row2, textvariable=self.port_var, width=8).pack(side=tk.LEFT, padx=6)
 
         self.status_var = tk.StringVar(value="Exposición: parada")
@@ -118,12 +147,12 @@ class NexusMountPC(tk.Tk):
         crow = ttk.Frame(v)
         crow.pack(fill=tk.X, padx=12, pady=4)
         ttk.Label(crow, text="IP:").pack(side=tk.LEFT)
-        self.remote_ip_var = tk.StringVar()
+        self.remote_ip_var = tk.StringVar(value=str(self.cfg.get("last_remote_host") or ""))
         ttk.Entry(crow, textvariable=self.remote_ip_var, width=24).pack(
             side=tk.LEFT, padx=4
         )
         ttk.Label(crow, text="Puerto:").pack(side=tk.LEFT)
-        self.remote_port_var = tk.StringVar(value=str(DEFAULT_PORT))
+        self.remote_port_var = tk.StringVar(value=str(self.cfg.get("last_remote_port") or DEFAULT_PORT))
         ttk.Entry(crow, textvariable=self.remote_port_var, width=8).pack(
             side=tk.LEFT, padx=4
         )
@@ -157,6 +186,10 @@ class NexusMountPC(tk.Tk):
         )
 
         self.entries: list[dict] = []
+
+    def _persist(self, **kwargs) -> None:
+        self.cfg.update(kwargs)
+        save_config(self.cfg)
 
     def _pick_folder(self) -> None:
         path = filedialog.askdirectory(initialdir=str(self.share_root))
@@ -199,10 +232,16 @@ class NexusMountPC(tk.Tk):
         self._refresh_local_ips()
         ips = local_ipv4()
         self.status_var.set(f"Exposición ACTIVA · {root} · puerto {port}")
+        self._persist(
+            share_root=str(root),
+            share_port=port,
+            auto_start_share=True,
+        )
         messagebox.showinfo(
             APP_TITLE,
             f"Disco expuesto (solo lectura)\n\nCarpeta: {root}\nPuerto: {port}\n"
             f"IPs: {', '.join(ips) or '—'}\n\n"
+            "Configuración guardada en ~/.nexusmount/pc_config.json\n"
             "En Android: Interconexión → Conectar por IP.",
         )
 
@@ -216,6 +255,7 @@ class NexusMountPC(tk.Tk):
             pass
         self.server = None
         self.status_var.set("Exposición: parada")
+        self._persist(auto_start_share=False)
 
     def _connect_remote(self) -> None:
         host = self.remote_ip_var.get().strip()
@@ -230,6 +270,13 @@ class NexusMountPC(tk.Tk):
         self.remote_host = host
         self.remote_port = port
         self.path_stack = []
+        self._persist(last_remote_host=host, last_remote_port=port)
+        hist = list(self.cfg.get("remote_history") or [])
+        key = host if port == DEFAULT_PORT else f"{host}:{port}"
+        if key in hist:
+            hist.remove(key)
+        hist.insert(0, key)
+        self._persist(remote_history=hist[:20])
         self._refresh_remote()
 
     def _current_path(self) -> str:
@@ -334,7 +381,17 @@ class NexusMountPC(tk.Tk):
         return f"{n // (1024 * 1024 * 1024)} GB"
 
     def on_close(self) -> None:
-        self._stop_share()
+        try:
+            self._persist(
+                share_root=self.share_path_var.get().strip() or str(self.share_root),
+                share_port=int(self.port_var.get() or DEFAULT_PORT),
+                last_remote_host=self.remote_ip_var.get().strip(),
+                last_remote_port=int(self.remote_port_var.get() or DEFAULT_PORT),
+            )
+        except Exception:
+            pass
+        # No detener exposición automáticamente: el usuario puede querer dejarla
+        # Si prefiere detener al cerrar, descomenta: self._stop_share()
         self.destroy()
 
 
