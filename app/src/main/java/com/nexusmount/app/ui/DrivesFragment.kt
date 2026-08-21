@@ -32,7 +32,7 @@ class DrivesFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         binding.titleText.text = "Mis Unidades"
-        binding.subtitleText.text = "SMB · Listar shares por IP · Local"
+        binding.subtitleText.text = "SMB robusto · Diagnóstico · Listar shares"
         binding.primaryAction.text = "Añadir / listar Samba"
         binding.primaryAction.setOnClickListener { showAddSmbDialog() }
 
@@ -80,54 +80,76 @@ class DrivesFragment : Fragment() {
                 layout.addView(this)
             }
         }
-        val host = field("IP Tailscale o local (ej: 100.64.0.10)")
-        val user = field("Usuario")
+        val host = field("IP Tailscale o local (ej: 100.x.x.x)")
+        val user = field("Usuario Windows/NAS")
         val pass = field("Contraseña").apply {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         }
-        val domain = field("Dominio (opcional, vacío si no aplica)")
-        val shareManual = field("Share manual (opcional si vas a listar)")
+        val domain = field("Dominio (déjalo vacío si no usas dominio)")
+        val shareManual = field("Share manual (ej: share) si no lista")
 
         AlertDialog.Builder(ctx)
             .setTitle("Samba / SMB")
             .setView(layout)
             .setPositiveButton("Listar recursos") { _, _ ->
                 val h = host.text.toString().trim()
-                val u = user.text.toString().trim()
-                val p = pass.text.toString()
-                val d = domain.text.toString().trim()
                 if (h.isEmpty()) {
                     Toast.makeText(ctx, "IP obligatoria", Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                Toast.makeText(ctx, "Buscando shares en $h…", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "Conectando a $h…", Toast.LENGTH_SHORT).show()
                 viewLifecycleOwner.lifecycleScope.launch {
-                    val result = SmbHelper.listShares(h, u, p, d)
+                    val result = SmbHelper.listShares(
+                        h,
+                        user.text.toString(),
+                        pass.text.toString(),
+                        domain.text.toString()
+                    )
                     if (!result.success || result.shares.isEmpty()) {
-                        Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
-                        // Si puso share manual, intentar guardar igual
+                        showError("No se listaron shares", result.message)
                         val sm = shareManual.text.toString().trim()
                         if (sm.isNotEmpty()) {
-                            connectAndSave(h, sm, u, p, d)
+                            connectAndSave(h, sm, user.text.toString(), pass.text.toString(), domain.text.toString())
                         }
                     } else {
-                        showSharePicker(h, u, p, d, result.shares)
+                        showSharePicker(
+                            h,
+                            user.text.toString(),
+                            pass.text.toString(),
+                            domain.text.toString(),
+                            result.shares
+                        )
                     }
                 }
             }
-            .setNeutralButton("Conectar a share") { _, _ ->
+            .setNeutralButton("Diagnóstico") { _, _ ->
                 val h = host.text.toString().trim()
-                val s = shareManual.text.toString().trim()
-                val u = user.text.toString().trim()
-                val p = pass.text.toString()
-                val d = domain.text.toString().trim()
-                if (h.isEmpty() || s.isEmpty()) {
-                    Toast.makeText(ctx, "IP y share obligatorios", Toast.LENGTH_SHORT).show()
+                if (h.isEmpty()) {
+                    Toast.makeText(ctx, "Pon la IP primero", Toast.LENGTH_SHORT).show()
                     return@setNeutralButton
                 }
-                connectAndSave(h, s, u, p, d)
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val r = SmbHelper.diagnose(h)
+                    showError("Diagnóstico", r.message)
+                }
             }
-            .setNegativeButton("Cancelar", null)
+            .setNegativeButton("Conectar share") { _, _ ->
+                val h = host.text.toString().trim()
+                val s = shareManual.text.toString().trim()
+                if (h.isEmpty() || s.isEmpty()) {
+                    Toast.makeText(ctx, "IP y share obligatorios", Toast.LENGTH_SHORT).show()
+                    return@setNegativeButton
+                }
+                connectAndSave(h, s, user.text.toString(), pass.text.toString(), domain.text.toString())
+            }
+            .show()
+    }
+
+    private fun showError(title: String, message: String) {
+        AlertDialog.Builder(requireContext())
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("OK", null)
             .show()
     }
 
@@ -141,8 +163,7 @@ class DrivesFragment : Fragment() {
         AlertDialog.Builder(requireContext())
             .setTitle("Recursos en $host")
             .setItems(shares.toTypedArray()) { _, which ->
-                val share = shares[which]
-                connectAndSave(host, share, user, pass, domain)
+                connectAndSave(host, shares[which], user, pass, domain)
             }
             .setNegativeButton("Cerrar", null)
             .show()
@@ -156,7 +177,7 @@ class DrivesFragment : Fragment() {
         domain: String
     ) {
         val ctx = requireContext()
-        Toast.makeText(ctx, "Conectando a //$host/$share …", Toast.LENGTH_SHORT).show()
+        Toast.makeText(ctx, "Conectando //$host/$share …", Toast.LENGTH_SHORT).show()
         viewLifecycleOwner.lifecycleScope.launch {
             val result = SmbHelper.testConnection(host, share, user, pass, domain)
             if (result.success) {
@@ -173,7 +194,7 @@ class DrivesFragment : Fragment() {
                 Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
                 refresh()
             } else {
-                Toast.makeText(ctx, result.message, Toast.LENGTH_LONG).show()
+                showError("Error de conexión", result.message)
             }
         }
     }
