@@ -40,6 +40,7 @@ class SmbBrowserFragment : Fragment() {
     private var pass = ""
     private var domain = ""
     private var pathStack = mutableListOf<String>()
+    private var readOnly = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,6 +50,7 @@ class SmbBrowserFragment : Fragment() {
             user = it.getString("user") ?: ""
             pass = it.getString("pass") ?: ""
             domain = it.getString("domain") ?: ""
+            readOnly = it.getBoolean("readOnly", false)
         }
     }
 
@@ -58,7 +60,7 @@ class SmbBrowserFragment : Fragment() {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        binding.titleText.text = "//$host/$share"
+        binding.titleText.text = if (readOnly) "Visor //$host/$share" else "//$host/$share"
         updateActionButton()
         binding.primaryAction.setOnClickListener { onPrimaryAction() }
 
@@ -150,16 +152,14 @@ class SmbBrowserFragment : Fragment() {
     }
 
     private fun showFileMenu(f: FileEntry) {
+        val options = if (readOnly) {
+            arrayOf("Abrir con… (solo lectura)", "Copiar al teléfono", "Información")
+        } else {
+            arrayOf("Abrir con…", "Copiar al teléfono", "Información", "Eliminar del servidor")
+        }
         AlertDialog.Builder(requireContext())
-            .setTitle(f.name)
-            .setItems(
-                arrayOf(
-                    "Abrir con…",
-                    "Copiar al teléfono",
-                    "Información",
-                    "Eliminar del servidor"
-                )
-            ) { _, which ->
+            .setTitle(f.name + if (readOnly) " · visor" else "")
+            .setItems(options) { _, which ->
                 when (which) {
                     0 -> openFile(f)
                     1 -> copyToPhone(f)
@@ -168,7 +168,7 @@ class SmbBrowserFragment : Fragment() {
                         .setMessage("Tamaño: ${formatSize(f.sizeBytes)}\nRuta: /${f.path}")
                         .setPositiveButton("OK", null)
                         .show()
-                    3 -> confirmDelete(f)
+                    3 -> if (!readOnly) confirmDelete(f)
                 }
             }
             .setNegativeButton("Cerrar", null)

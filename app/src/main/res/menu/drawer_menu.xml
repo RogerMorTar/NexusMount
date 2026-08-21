@@ -7,6 +7,7 @@
         <item android:id="@+id/filesFragment" android:title="Explorador Pro" android:icon="@android:drawable/ic_menu_agenda" />
         <item android:id="@+id/transfersFragment" android:title="Transferencias" android:icon="@android:drawable/ic_menu_upload" />
         <item android:id="@+id/backupFragment" android:title="Backups" android:icon="@android:drawable/ic_menu_revert" />
+        <item android:id="@+id/interconnectFragment" android:title="Interconexión (visor)" android:icon="@android:drawable/ic_menu_view" />
         <item android:id="@+id/collabFragment" android:title="Trabajo colaborativo" android:icon="@android:drawable/ic_menu_my_calendar" />
         <item android:id="@+id/aiFragment" android:title="Rigo · Asistente IA" android:icon="@android:drawable/ic_menu_edit" />
     </group>

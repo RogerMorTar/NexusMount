@@ -2,7 +2,6 @@ package com.nexusmount.app.ui
 
 import android.app.AlertDialog
 import android.os.Bundle
-import android.os.Environment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -11,33 +10,33 @@ import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.nexusmount.app.NexusApp
+import com.nexusmount.app.R
 import com.nexusmount.app.data.DriveType
 import com.nexusmount.app.data.SmbHelper
 import com.nexusmount.app.data.TransferItem
 import com.nexusmount.app.databinding.FragmentListBinding
-import com.nexusmount.app.transfer.TransferManager
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
 class TransfersFragment : Fragment() {
-
     private var _binding: FragmentListBinding? = null
     private val binding get() = _binding!!
     private val repo get() = (requireActivity().application as NexusApp).repository
 
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
-        _binding = FragmentListBinding.inflate(inflater, container, false)
+    override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
+        _binding = FragmentListBinding.inflate(i, c, false)
         return binding.root
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+    override fun onViewCreated(v: View, s: Bundle?) {
         binding.titleText.text = "Transferencias"
-        binding.subtitleText.text = "Historial y nuevas copias"
-        binding.primaryAction.text = "+ Nueva transferencia"
-        binding.primaryAction.setOnClickListener { startNewTransfer() }
+        binding.subtitleText.text = "Copiar archivos · historial"
+        binding.primaryAction.text = "Nueva transferencia"
+        binding.primaryAction.setOnClickListener { startTransferWizard() }
         refresh()
     }
 
@@ -48,106 +47,73 @@ class TransfersFragment : Fragment() {
 
     private fun refresh() {
         val list = repo.getTransfers()
-        binding.recycler.layoutManager = LinearLayoutManager(requireContext())
+        val rows = mutableListOf(
+            "── Accesos rápidos ──" to "",
+            "Ir a Dashboard" to "Resumen del sistema",
+            "Ir a Mis Unidades" to "SMB y local",
+            "Interconexión (solo lectura)" to "Ver/copiar por IP sin modificar",
+            "── Historial ──" to ""
+        )
         if (list.isEmpty()) {
-            binding.emptyText.visibility = View.VISIBLE
-            binding.emptyText.text = "Sin transferencias.\nPulsa «+ Nueva transferencia» o copia desde el explorador SMB."
-            binding.recycler.adapter = SimpleAdapter(emptyList())
+            rows.add("Sin transferencias" to "Pulsa «Nueva transferencia» o copia desde el explorador SMB")
         } else {
-            binding.emptyText.visibility = View.GONE
-            binding.recycler.adapter = SimpleAdapter(
-                list.map { "${it.name} · ${it.progress}%" to "${it.status} · ${it.from} → ${it.to}" }
-            ) { pos ->
-                val t = list[pos]
-                AlertDialog.Builder(requireContext())
-                    .setTitle(t.name)
-                    .setMessage("Estado: ${t.status}\n${t.from}\n→\n${t.to}")
-                    .setPositiveButton("OK", null)
-                    .setNegativeButton("Quitar del historial") { _, _ ->
-                        val next = list.toMutableList().also { it.removeAt(pos) }
-                        repo.saveTransfers(next)
-                        refresh()
-                    }
-                    .show()
+            list.take(40).forEach {
+                rows.add(it.name to "${it.status} · ${it.progress}% · ${it.fromPath} → ${it.toPath}")
             }
         }
+        binding.recycler.layoutManager = LinearLayoutManager(requireContext())
+        binding.recycler.adapter = SimpleAdapter(rows) { pos ->
+            when (rows[pos].first) {
+                "Ir a Dashboard" -> findNavController().navigate(R.id.dashboardFragment)
+                "Ir a Mis Unidades" -> findNavController().navigate(R.id.drivesFragment)
+                "Interconexión (solo lectura)" -> findNavController().navigate(R.id.interconnectFragment)
+                "Nueva transferencia", "Sin transferencias" -> startTransferWizard()
+            }
+        }
+        binding.emptyText.visibility = View.GONE
     }
 
-    private fun startNewTransfer() {
+    private fun startTransferWizard() {
         AlertDialog.Builder(requireContext())
-            .setTitle("Tipo de transferencia")
+            .setTitle("Nueva transferencia")
             .setItems(
                 arrayOf(
-                    "Copiar archivo local → carpeta local",
-                    "Descargar desde unidad SMB (solo lectura ok)",
-                    "Ver historial / actualizar"
+                    "Desde unidad SMB → teléfono",
+                    "Ir al explorador SMB (abrir unidad)",
+                    "Interconexión solo lectura → teléfono",
+                    "Ir a Mis Unidades"
                 )
-            ) { _, which ->
-                when (which) {
-                    0 -> localCopyDialog()
-                    1 -> smbDownloadDialog()
-                    2 -> refresh()
+            ) { _, w ->
+                when (w) {
+                    0 -> copyFromSmbDrive()
+                    1, 3 -> findNavController().navigate(R.id.drivesFragment)
+                    2 -> findNavController().navigate(R.id.interconnectFragment)
                 }
             }
+            .setNegativeButton("Cerrar", null)
             .show()
     }
 
-    private fun localCopyDialog() {
-        val src = EditText(requireContext()).apply { hint = "Ruta origen absoluta" }
-        val dst = EditText(requireContext()).apply {
-            hint = "Carpeta destino"
-            setText(requireContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)?.absolutePath ?: "")
-        }
-        val box = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 20, 40, 10)
-            addView(src); addView(dst)
-        }
-        AlertDialog.Builder(requireContext())
-            .setTitle("Copia local")
-            .setView(box)
-            .setPositiveButton("Copiar") { _, _ ->
-                val s = File(src.text.toString().trim())
-                val dDir = File(dst.text.toString().trim())
-                if (!s.exists()) {
-                    toast("Origen no existe"); return@setPositiveButton
-                }
-                val dest = File(dDir, s.name)
-                viewLifecycleOwner.lifecycleScope.launch {
-                    val tm = TransferManager(repo)
-                    toast("Copiando…")
-                    val r = tm.copyFile(s, dest)
-                    r.onSuccess {
-                        toast("OK: ${dest.absolutePath}")
-                        refresh()
-                    }.onFailure { toast("Error: ${it.message}") }
-                }
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun smbDownloadDialog() {
+    private fun copyFromSmbDrive() {
         val drives = repo.getDrives().filter { it.type == DriveType.SMB }
         if (drives.isEmpty()) {
-            toast("No hay unidades SMB. Añade una en Mis Unidades.")
+            Toast.makeText(requireContext(), "No hay unidades SMB. Añade una en Mis Unidades.", Toast.LENGTH_LONG).show()
+            findNavController().navigate(R.id.drivesFragment)
             return
         }
         AlertDialog.Builder(requireContext())
-            .setTitle("Unidad SMB origen")
-            .setItems(drives.map { it.name }.toTypedArray()) { _, which ->
-                val d = drives[which]
+            .setTitle("Elige unidad SMB")
+            .setItems(drives.map { it.name }.toTypedArray()) { _, i ->
+                val d = drives[i]
                 val pathIn = EditText(requireContext()).apply {
-                    hint = "Ruta relativa en el share (ej. docs/informe.pdf)"
+                    hint = "Ruta archivo dentro del share (ej. foto.jpg o Docs/a.pdf)"
                 }
                 AlertDialog.Builder(requireContext())
-                    .setTitle("Archivo a descargar")
+                    .setTitle("Archivo a copiar")
                     .setView(pathIn)
-                    .setPositiveButton("Descargar") { _, _ ->
+                    .setPositiveButton("Copiar al teléfono") { _, _ ->
                         val rel = pathIn.text.toString().trim()
-                        if (rel.isEmpty()) {
-                            toast("Indica la ruta del archivo"); return@setPositiveButton
-                        }
+                        if (rel.isEmpty()) return@setPositiveButton
                         val m = Regex("""^//([^/]+)/(.+)$""").find(d.path) ?: return@setPositiveButton
                         val host = m.groupValues[1]
                         val share = m.groupValues[2]
@@ -155,39 +121,33 @@ class TransfersFragment : Fragment() {
                         val user = prefs.getString("${d.id}_user", "") ?: ""
                         val pass = prefs.getString("${d.id}_pass", "") ?: ""
                         val domain = prefs.getString("${d.id}_domain", "") ?: ""
-                        val destDir = requireContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                        val destDir = requireContext().getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS)
                             ?: requireContext().filesDir
-                        val dest = File(destDir, rel.substringAfterLast('/'))
+                        val dest = File(destDir, File(rel).name)
+                        Toast.makeText(requireContext(), "Copiando…", Toast.LENGTH_SHORT).show()
                         viewLifecycleOwner.lifecycleScope.launch {
-                            toast("Descargando…")
                             val r = SmbHelper.downloadFile(host, share, user, pass, rel, dest, domain)
-                            if (r.success) {
-                                val list = repo.getTransfers()
-                                list.add(
-                                    0,
-                                    TransferItem(
-                                        UUID.randomUUID().toString(),
-                                        dest.name,
-                                        "//$host/$share/$rel",
-                                        dest.absolutePath,
-                                        100,
-                                        "completed"
-                                    )
-                                )
-                                repo.saveTransfers(list)
-                                toast("Guardado: ${dest.absolutePath}")
-                                refresh()
-                            } else toast(r.message)
+                            val item = TransferItem(
+                                UUID.randomUUID().toString(),
+                                dest.name,
+                                "//$host/$share/$rel",
+                                dest.absolutePath,
+                                if (r.success) 100 else 0,
+                                if (r.success) "completed" else "error"
+                            )
+                            val all = repo.getTransfers()
+                            all.add(0, item)
+                            repo.saveTransfers(all)
+                            Toast.makeText(requireContext(), r.message, Toast.LENGTH_LONG).show()
+                            refresh()
                         }
                     }
                     .setNegativeButton("Cancelar", null)
                     .show()
             }
+            .setNegativeButton("Cancelar", null)
             .show()
     }
-
-    private fun toast(m: String) =
-        Toast.makeText(requireContext(), m, Toast.LENGTH_SHORT).show()
 
     override fun onDestroyView() {
         super.onDestroyView()

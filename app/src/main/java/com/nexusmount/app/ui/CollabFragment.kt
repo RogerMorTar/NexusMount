@@ -1,6 +1,7 @@
 package com.nexusmount.app.ui
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -116,6 +117,13 @@ class CollabFragment : Fragment() {
         items.add("Visor por IP (solo lectura)" to "Ver y copiar archivos de otro dispositivo")
         items.add("Abrir documento con apps" to "WPS, PDF, galería… (elige archivo local)")
 
+        items.add("── Herramientas ──" to "")
+        items.add("Abrir WPS Office" to "Documentos Office en el dispositivo")
+        items.add("Abrir visor PDF" to "Elige app PDF instalada")
+        items.add("Agenda / notas del equipo" to "Notas rápidas compartidas en el espacio")
+        items.add("Calendario" to "Abrir calendario del sistema")
+        items.add("Reuniones" to "Registrar reunión (fecha, enlace, notas)")
+        items.add("Interconexión solo lectura" to "Ver archivos por IP sin modificar")
         items.add("── Acciones rápidas ──" to "")
         items.add("Unirse con código" to "Introduce un código de invitación")
         items.add("Cómo funciona" to "Tailscale + SMB: misma red mesh, carpetas del PC/NAS")
@@ -130,6 +138,15 @@ class CollabFragment : Fragment() {
                     val name = label.removePrefix("👥 ").trim()
                     openSpace(name)
                 }
+                label == "Abrir WPS Office" -> openApp(listOf(
+                    "cn.wps.moffice_eng", "cn.wps.moffice", "com.mobisystems.office"
+                ), "WPS / Office")
+                label == "Abrir visor PDF" -> openPdfPicker()
+                label == "Agenda / notas del equipo" -> openAgenda()
+                label == "Calendario" -> openCalendar()
+                label == "Reuniones" -> openMeetings()
+                label == "Interconexión solo lectura" ->
+                    findNavController().navigate(com.nexusmount.app.R.id.interconnectFragment)
                 label == "Unirse con código" -> joinWithCode()
                 label == "Cómo funciona" -> showHelp()
                 label == "Nueva reunión / agenda" -> addMeeting()
@@ -495,6 +512,112 @@ class CollabFragment : Fragment() {
             .show()
     }
 
+
+
+    private fun openApp(packages: List<String>, label: String) {
+        for (pkg in packages) {
+            val launch = requireContext().packageManager.getLaunchIntentForPackage(pkg)
+            if (launch != null) {
+                startActivity(launch)
+                return
+            }
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle(label)
+            .setMessage("No se encontró $label instalado. Instálalo desde Play Store para abrir documentos Office.")
+            .setPositiveButton("Play Store") { _, _ ->
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://search?q=WPS Office")))
+                } catch (_: Exception) {}
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    private fun openPdfPicker() {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            type = "application/pdf"
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            startActivity(Intent.createChooser(intent, "Abrir PDF con"))
+        } catch (_: Exception) {
+            toast("Instala un lector PDF (Google PDF, Adobe, WPS…)")
+        }
+    }
+
+    private fun openCalendar() {
+        try {
+            val intent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_APP_CALENDAR)
+            }
+            startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("content://com.android.calendar/time/")))
+            } catch (_: Exception) {
+                toast("No hay calendario disponible")
+            }
+        }
+    }
+
+    private fun openAgenda() {
+        val p = prefs()
+        val input = EditText(requireContext()).apply {
+            setText(p.getString("team_agenda", ""))
+            hint = "Notas de agenda del equipo"
+            minLines = 4
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("Agenda / notas")
+            .setView(input)
+            .setPositiveButton("Guardar") { _, _ ->
+                p.edit().putString("team_agenda", input.text.toString()).apply()
+                toast("Agenda guardada")
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
+
+    private fun openMeetings() {
+        val p = prefs()
+        val arr = try { org.json.JSONArray(p.getString("meetings", "[]")) } catch (_: Exception) { org.json.JSONArray() }
+        val lines = mutableListOf<String>()
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            lines.add("${o.optString("when")} · ${o.optString("title")} · ${o.optString("link")}")
+        }
+        AlertDialog.Builder(requireContext())
+            .setTitle("Reuniones")
+            .setMessage(if (lines.isEmpty()) "Sin reuniones aún" else lines.joinToString("\n\n"))
+            .setPositiveButton("Nueva") { _, _ ->
+                val title = EditText(requireContext()).apply { hint = "Título" }
+                val whenE = EditText(requireContext()).apply { hint = "Fecha/hora (ej. 2026-08-22 18:00)" }
+                val link = EditText(requireContext()).apply { hint = "Enlace Meet/Teams/Zoom" }
+                val notes = EditText(requireContext()).apply { hint = "Notas" }
+                val box = LinearLayout(requireContext()).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(40, 16, 40, 8)
+                    addView(title); addView(whenE); addView(link); addView(notes)
+                }
+                AlertDialog.Builder(requireContext())
+                    .setTitle("Nueva reunión")
+                    .setView(box)
+                    .setPositiveButton("Guardar") { _, _ ->
+                        arr.put(org.json.JSONObject()
+                            .put("title", title.text.toString())
+                            .put("when", whenE.text.toString())
+                            .put("link", link.text.toString())
+                            .put("notes", notes.text.toString()))
+                        p.edit().putString("meetings", arr.toString()).apply()
+                        toast("Reunión guardada")
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
+    }
 
     private fun toast(m: String) =
         Toast.makeText(requireContext(), m, Toast.LENGTH_SHORT).show()
