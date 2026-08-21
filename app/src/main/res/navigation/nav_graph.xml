@@ -3,20 +3,31 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/nav_graph"
     app:startDestination="@id/dashboardFragment">
+
     <fragment android:id="@+id/dashboardFragment" android:name="com.nexusmount.app.ui.DashboardFragment" android:label="Dashboard" />
+    <fragment android:id="@+id/addConnectionFragment" android:name="com.nexusmount.app.ui.AddConnectionFragment" android:label="Añadir conexión" />
     <fragment android:id="@+id/drivesFragment" android:name="com.nexusmount.app.ui.DrivesFragment" android:label="Unidades" />
     <fragment android:id="@+id/filesFragment" android:name="com.nexusmount.app.ui.FilesFragment" android:label="Explorador" />
     <fragment android:id="@+id/transfersFragment" android:name="com.nexusmount.app.ui.TransfersFragment" android:label="Transferencias" />
-    <fragment android:id="@+id/settingsFragment" android:name="com.nexusmount.app.ui.SettingsFragment" android:label="Ajustes" />
-    <fragment android:id="@+id/aiFragment" android:name="com.nexusmount.app.ui.AiFragment" android:label="IA" />
-    <fragment android:id="@+id/securityFragment" android:name="com.nexusmount.app.ui.SecurityFragment" android:label="Seguridad" />
     <fragment android:id="@+id/backupFragment" android:name="com.nexusmount.app.ui.BackupFragment" android:label="Backups" />
-    <fragment android:id="@+id/modulesConfigFragment" android:name="com.nexusmount.app.ui.ModulesConfigFragment" android:label="Módulos" />
+    <fragment android:id="@+id/backupConfigFragment" android:name="com.nexusmount.app.ui.BackupConfigFragment" android:label="Config backups" />
+    <fragment android:id="@+id/recoveryFragment" android:name="com.nexusmount.app.ui.RecoveryFragment" android:label="Recuperación" />
+    <fragment android:id="@+id/aiFragment" android:name="com.nexusmount.app.ui.AiFragment" android:label="Rigo" />
+    <fragment android:id="@+id/aiAutomationFragment" android:name="com.nexusmount.app.ui.AiAutomationFragment" android:label="Automatización" />
+    <fragment android:id="@+id/aiPrivacyFragment" android:name="com.nexusmount.app.ui.AiPrivacyFragment" android:label="Privacidad IA" />
+    <fragment android:id="@+id/terminalFragment" android:name="com.nexusmount.app.ui.TerminalFragment" android:label="Terminal" />
+    <fragment android:id="@+id/securityFragment" android:name="com.nexusmount.app.ui.SecurityFragment" android:label="Seguridad" />
+    <fragment android:id="@+id/intrusionFragment" android:name="com.nexusmount.app.ui.IntrusionFragment" android:label="Intrusión" />
+    <fragment android:id="@+id/permissionsFragment" android:name="com.nexusmount.app.ui.PermissionsFragment" android:label="Permisos" />
+    <fragment android:id="@+id/logsFragment" android:name="com.nexusmount.app.ui.LogsFragment" android:label="Logs" />
     <fragment android:id="@+id/sambaFragment" android:name="com.nexusmount.app.ui.SambaFragment" android:label="Samba" />
     <fragment android:id="@+id/tailscaleFragment" android:name="com.nexusmount.app.ui.TailscaleFragment" android:label="Tailscale" />
-    <fragment android:id="@+id/collabFragment" android:name="com.nexusmount.app.ui.CollabFragment" android:label="Colaborativo" />
-    <fragment android:id="@+id/logsFragment" android:name="com.nexusmount.app.ui.LogsFragment" android:label="Logs" />
+    <fragment android:id="@+id/deviceSyncFragment" android:name="com.nexusmount.app.ui.DeviceSyncFragment" android:label="Sync" />
     <fragment android:id="@+id/networkGuideFragment" android:name="com.nexusmount.app.ui.NetworkGuideFragment" android:label="Guía red" />
     <fragment android:id="@+id/webAccessFragment" android:name="com.nexusmount.app.ui.WebAccessFragment" android:label="Acceso Web" />
+    <fragment android:id="@+id/collabFragment" android:name="com.nexusmount.app.ui.CollabFragment" android:label="Colaborativo" />
+    <fragment android:id="@+id/modulesConfigFragment" android:name="com.nexusmount.app.ui.ModulesConfigFragment" android:label="Módulos" />
     <fragment android:id="@+id/installerFragment" android:name="com.nexusmount.app.ui.InstallerFragment" android:label="Instalador" />
+    <fragment android:id="@+id/languageFragment" android:name="com.nexusmount.app.ui.LanguageFragment" android:label="Idioma" />
+    <fragment android:id="@+id/settingsFragment" android:name="com.nexusmount.app.ui.SettingsFragment" android:label="Ajustes" />
 </navigation>
